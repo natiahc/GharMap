@@ -55,11 +55,14 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
             ./gradlew --no-daemon :app:connectedDebugAndroidTest
-            adb pull /sdcard/Android/data/com.gharmap.app/files/smoke-room.png app/build/smoke-room.png
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            adb shell am start -W -n com.gharmap.app/.MainActivity
+            adb shell screencap -p /sdcard/gharmap-home.png
+            adb pull /sdcard/gharmap-home.png app/build/gharmap-home.png
       - uses: actions/upload-artifact@v4
         with:
           name: Android-screen
-          path: app/build/smoke-room.png
+          path: app/build/gharmap-home.png
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -5,10 +5,6 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import androidx.test.platform.app.InstrumentationRegistry;
-import android.graphics.Bitmap;
-import java.io.File;
-import java.io.FileOutputStream;
 import static androidx.test.espresso.Espresso.onView;
 import static androidx.test.espresso.action.ViewActions.*;
 import static androidx.test.espresso.assertion.ViewAssertions.matches;
@@ -34,13 +30,6 @@ public class ProjectFlowTest {
         onView(withText("12.00 m² · user-measured")).perform(scrollTo()).check(matches(isDisplayed()));
         activity.getScenario().recreate();
         onView(withText("12.00 m² · user-measured")).perform(scrollTo()).check(matches(isDisplayed()));
-        var instrumentation=InstrumentationRegistry.getInstrumentation();
-        Bitmap image=instrumentation.getUiAutomation().takeScreenshot();
-        if(image!=null){
-            File file=new File(instrumentation.getTargetContext().getExternalFilesDir(null),"smoke-room.png");
-            try(FileOutputStream output=new FileOutputStream(file)){image.compress(Bitmap.CompressFormat.PNG,100,output);}
-            image.recycle();
-        }
         onView(withText("Delete property & recordings")).perform(scrollTo(),click());
         onView(withText("Delete")).perform(click());
         onView(withText("+  New property")).check(matches(isDisplayed()));
