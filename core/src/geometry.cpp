@@ -25,11 +25,11 @@ bool intersects(Point a, Point b, Point c, Point d) {
 }
 std::string escape(const std::string& s) {
     std::string out;
-    for(char c:s) switch(c) {
+    for(char c:s) { if(static_cast<unsigned char>(c)<32&&c!='\t'&&c!='\n'&&c!='\r')continue; switch(c) {
         case '&':out+="&amp;";break; case '<':out+="&lt;";break;
         case '>':out+="&gt;";break; case '"':out+="&quot;";break;
         case '\'':out+="&apos;";break; default:out+=c;
-    }
+    }}
     return out;
 }
 std::ostringstream stream() { std::ostringstream s; s.imbue(std::locale::classic()); return s; }

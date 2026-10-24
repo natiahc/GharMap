@@ -24,6 +24,8 @@ int main(){
     auto exportSvg=svg(room,"Room <&> \"A\"");
     require(exportSvg.find("&lt;&amp;&gt; &quot;A&quot;")!=std::string::npos,"XML escaped");
     require(exportSvg.find("12.00 m²")!=std::string::npos,"export dimensions");
+    require(svg(room,"部屋 🏠").find("部屋 🏠")!=std::string::npos,"international UTF-8 labels");
+    require(svg(room,std::string("Room")+char(1)).find(char(1))==std::string::npos,"XML control characters removed");
     require(svg({},"invalid").empty(),"no invalid SVG");
     require(polygonJson(room)=="[[0,0],[4,0],[4,3],[0,3]]","portable serialization");
     std::cout<<"All geometry tests passed\n";

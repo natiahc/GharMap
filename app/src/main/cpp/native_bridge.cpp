@@ -4,6 +4,7 @@
 #include "arcore_c_api.h"
 #include "gharmap/geometry.h"
 #include <cmath>
+#include <codecvt>
 #include <fstream>
 #include <iomanip>
 #include <locale>
@@ -27,8 +28,19 @@ struct Capture {
         if(frame)ArFrame_destroy(frame);if(session)ArSession_destroy(session);}
 };
 Capture* ptr(jlong p){return reinterpret_cast<Capture*>(p);}
-jstring text(JNIEnv* e,const std::string& s){return e->NewStringUTF(s.c_str());}
-std::string str(JNIEnv* e,jstring s){if(!s)return {};const char* p=e->GetStringUTFChars(s,nullptr);std::string r(p);e->ReleaseStringUTFChars(s,p);return r;}
+jstring text(JNIEnv* e,const std::string& s){
+    // JNI modified UTF-8 is not file UTF-8; use UTF-16 at the JNI boundary so
+    // international names and supplementary characters survive SVG export.
+    try {std::wstring_convert<std::codecvt_utf8_utf16<char16_t>,char16_t> cv;
+        auto u=cv.from_bytes(s);return e->NewString(reinterpret_cast<const jchar*>(u.data()),static_cast<jsize>(u.size()));}
+    catch(const std::range_error&){return e->NewStringUTF("Invalid text encoding");}
+}
+std::string str(JNIEnv* e,jstring s){
+    if(!s)return {};const jchar* p=e->GetStringChars(s,nullptr);if(!p)return {};
+    std::u16string u(reinterpret_cast<const char16_t*>(p),static_cast<size_t>(e->GetStringLength(s)));e->ReleaseStringChars(s,p);
+    try {std::wstring_convert<std::codecvt_utf8_utf16<char16_t>,char16_t> cv;return cv.to_bytes(u);}
+    catch(const std::range_error&){return "Invalid label";}
+}
 std::vector<gharmap::Point> points(JNIEnv* e,jdoubleArray a){
     std::vector<gharmap::Point> p;if(!a)return p;
     jsize n=e->GetArrayLength(a);if(n%2)return p;
@@ -129,6 +141,7 @@ JNIEXPORT jstring JNICALL Java_com_gharmap_app_NativeBridge_draw(JNIEnv* e,jclas
         auto updated=ArSession_update(c.session,c.frame);
         if(updated!=AR_SUCCESS)c.error="Camera update failed; pause and reopen the scan";
         else {
+            c.error.clear();
             ArFrame_getTimestamp(c.session,c.frame,&c.timestamp);
             const float vertices[]={-1,-1,1,-1,-1,1,1,1};float uv[8];
             ArFrame_transformCoordinates2d(c.session,c.frame,AR_COORDINATES_2D_OPENGL_NORMALIZED_DEVICE_COORDINATES,

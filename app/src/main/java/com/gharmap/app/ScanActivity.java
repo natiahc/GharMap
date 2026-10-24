@@ -27,7 +27,7 @@ import javax.microedition.khronos.opengles.GL10;
 
 public final class ScanActivity extends Activity implements GLSurfaceView.Renderer {
     private long handle;private GLSurfaceView surface;private TextView status;
-    private Button record;private boolean running=false,installRequested=false,automatic=false;
+    private Button record;private boolean running=false,installRequested=false;private volatile boolean automatic=false;
     private String capture="";private long lastUi=0;private boolean leaving=false;
     @Override public void onCreate(Bundle state){
         super.onCreate(state);getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
