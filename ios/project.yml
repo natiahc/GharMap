@@ -1,0 +1,33 @@
+name: GharMap
+options:
+  bundleIdPrefix: com.gharmap
+  deploymentTarget:
+    iOS: '16.0'
+settings:
+  base:
+    SWIFT_VERSION: '5.0'
+    CLANG_CXX_LANGUAGE_STANDARD: c++17
+    HEADER_SEARCH_PATHS: '$(SRCROOT)/../core/include'
+targets:
+  GharMap:
+    type: application
+    platform: iOS
+    sources:
+      - path: GharMap
+      - path: ../core/src/geometry.cpp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.gharmap.app
+        SWIFT_OBJC_BRIDGING_HEADER: GharMap/BridgingHeader.h
+        TARGETED_DEVICE_FAMILY: '1,2'
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: GharMap
+        INFOPLIST_KEY_NSCameraUsageDescription: GharMap uses the camera to capture room geometry and optional walkthrough recordings on your device.
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        MARKETING_VERSION: '0.1.0'
+        CURRENT_PROJECT_VERSION: 1
+    dependencies:
+      - sdk: ARKit.framework
+      - sdk: SceneKit.framework
+      - sdk: AVFoundation.framework

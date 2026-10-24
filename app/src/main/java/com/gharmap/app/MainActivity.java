@@ -177,7 +177,8 @@ public final class MainActivity extends Activity {
     private byte[] pdf() throws Exception {
         JSONObject f=project.getJSONArray("floors").getJSONObject(floor);JSONArray rooms=f.getJSONArray("rooms");
         if(rooms.length()==0)throw new IllegalStateException("Add a room before exporting");
-        try(PdfDocument doc=new PdfDocument();ByteArrayOutputStream out=new ByteArrayOutputStream()){
+        PdfDocument doc=new PdfDocument();
+        try(ByteArrayOutputStream out=new ByteArrayOutputStream()){
             for(int k=0;k<rooms.length();k++){
                 JSONObject room=rooms.getJSONObject(k);double[] xy=ProjectStore.coordinates(room.getJSONArray("points"));
                 PdfDocument.Page page=doc.startPage(new PdfDocument.PageInfo.Builder(595,842,k+1).create());Canvas c=page.getCanvas();Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -195,7 +196,7 @@ public final class MainActivity extends Activity {
                 p.setTextSize(10);c.drawText("Unverified room geometry. Not a construction or survey drawing.",36,760,p);
                 c.drawText("Rooms are separate local scans; geographic north is not established.",36,780,p);doc.finishPage(page);
             }doc.writeTo(out);return out.toByteArray();
-        }
+        } finally { doc.close(); }
     }
     private void error(Exception ex){new AlertDialog.Builder(this).setTitle("Could not complete action").setMessage(ex.getMessage()).setPositiveButton("OK",null).show();}
     @Override public void onBackPressed(){if(project!=null){project=null;render();}else super.onBackPressed();}
