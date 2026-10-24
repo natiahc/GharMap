@@ -153,9 +153,9 @@ JNIEXPORT jstring JNICALL Java_com_gharmap_app_NativeBridge_draw(JNIEnv* e,jclas
                         ArCameraIntrinsics* intrinsics=nullptr;ArCameraIntrinsics_create(c.session,&intrinsics);
                         ArCamera_getImageIntrinsics(c.session,camera,intrinsics);
                         float focal[2],principal[2];int32_t dims[2];
-                        ArCameraIntrinsics_getFocalLength(c.session,intrinsics,focal);
-                        ArCameraIntrinsics_getPrincipalPoint(c.session,intrinsics,principal);
-                        ArCameraIntrinsics_getImageDimensions(c.session,intrinsics,dims);
+                        ArCameraIntrinsics_getFocalLength(c.session,intrinsics,&focal[0],&focal[1]);
+                        ArCameraIntrinsics_getPrincipalPoint(c.session,intrinsics,&principal[0],&principal[1]);
+                        ArCameraIntrinsics_getImageDimensions(c.session,intrinsics,&dims[0],&dims[1]);
                         ArCameraIntrinsics_destroy(intrinsics);
                         c.trace<<"{\"timestampNs\":"<<c.timestamp<<",\"cameraToWorldColumnMajor\":[";
                         for(int i=0;i<16;++i){if(i)c.trace<<",";c.trace<<m[i];}

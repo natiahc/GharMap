@@ -13,8 +13,10 @@ or destruction. The GL thread makes session updates and geometry queries.
 
 The platform-independent C++17 core validates polygons, calculates area/perimeter,
 intersects wall half-planes and exports dimensioned SVG. It has no JNI, Android,
-ARCore or UI dependency. An iOS Objective-C++/ARKit capture adapter is planned;
-there is no iOS application in this commit.
+ARCore or UI dependency. iOS uses SwiftUI, ARKit world tracking, an Objective-C++
+bridge to that same core, and AVAssetWriter for local RGB walkthrough video.
+ARKit world tracking does not require LiDAR on supported devices. iOS currently
+has a smaller editing/export feature set than Android; see the README matrix.
 
 ## Honest capture modes
 
@@ -69,7 +71,7 @@ data to this public repository.
 - Fuse depth observations and learn/reconstruct wall boundaries on non-depth phones.
 - Anchored shared-coordinate multi-room capture and verified multi-floor stitching.
 - Openings, irregular walls, user-confirmed north and metric/imperial display.
-- iOS ARKit adapter without a LiDAR requirement where hardware supports tracking.
+- Real-device testing and editing/export parity for the iOS ARKit adapter.
 - Optional, practitioner-configurable Vastu overlays; no health/wealth guarantees.
 
 Broad device support is a goal. Unsupported AR devices use measured entry, not

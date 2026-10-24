@@ -10,3 +10,7 @@ Terms: https://developers.google.com/ar/develop/terms
 
 GharMap is an independent implementation. It contains no CubiCasa code, assets,
 models, training data, trademarks or private API integrations.
+
+The Gradle wrapper scripts and JAR originate from the Gradle `v8.9.0` tag and
+are licensed under Apache-2.0; original script notices and JAR licence are retained.
+Source: https://github.com/gradle/gradle/tree/v8.9.0/gradle/wrapper

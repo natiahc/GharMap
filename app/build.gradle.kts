@@ -16,6 +16,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0-dev"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
         externalNativeBuild { cmake {
             cppFlags += listOf("-std=c++17", "-Wall", "-Wextra")
@@ -32,4 +33,7 @@ tasks.configureEach {
 dependencies {
     implementation("com.google.ar:core:1.48.0")
     arcoreNative("com.google.ar:core:1.48.0@aar")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
 }
