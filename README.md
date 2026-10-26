@@ -29,6 +29,8 @@ budget allocation and growth projections. No backend, analytics or cloud AI.
   principal/expense transaction atomically. Interest must be entered separately.
 - Monthly long-term/risk contribution scenarios, essential-expense reserves,
   emergency gap, no-income/one-income runway, risk funding cap and loss pause.
+- Password-encrypted full backup/restore across all spaces and record sections.
+  Restore is atomic and rejects invalid data; credentials/connections are excluded.
 - Money-until-payday scenarios from available cash, daily spending and unpaid
   commitments, excluding expected income and money lent.
 - Retirement growth scenarios with visible annual return, inflation, contribution
@@ -44,7 +46,7 @@ Recorded income/spending is not a reconciled account balance.
 
 **Not implemented:** Google authorization and automatic Sheets sync, cross-device
 partner invitations/access/revocation, statement adapters for arbitrary banks,
-receipts/OCR, recurring notifications, full backups, tax filing and iPhone finance
+receipts/OCR, recurring notifications, tax filing and iPhone finance
 screens. The `ios/`, `core/` and old geometry documents are legacy GharMap code;
 the Android app no longer depends on them. Legacy iOS builds are not PaisaPilot.
 
@@ -63,6 +65,7 @@ is no separate app database encryption or app lock yet.
 CSV exports are readable by recipients and contain selected-space transactions,
 including notes and pending entries. They exclude other spaces. They do not
 include goals, plans, holdings or commitments and are **not a complete backup**.
+Use the encrypted full-backup action for those records.
 Uninstalling deletes local records. External edits with conflicting IDs require
 manual reconciliation rather than silent replacement. Different IDs/sources
 may still represent the same transaction; verify against statements.
@@ -89,3 +92,20 @@ effective annual return, end-of-month contributions and annual step-ups, round
 down to paise, and exclude taxes/fees, market variability and withdrawals.
 
 See [the product roadmap](docs/PAISAPILOT_PRODUCT.md) for the longer-term scope.
+
+## Portable encrypted backups
+
+Format v1: `PPBK` ASCII, version byte `01`, 16 random salt bytes, 12 random nonce
+bytes, then AES-256-GCM ciphertext and its 16-byte authentication tag. The first
+33 bytes are authenticated additional data. Key derivation is PBKDF2-HMAC-SHA256,
+210,000 iterations, 32-byte output. Passphrases use 12–128 printable ASCII
+characters for platform-independent encoding; keep a strong passphrase separately.
+The app does not store it and cannot recover it. Limit: 10 MB.
+
+Plaintext schema: `{format:"PaisaPilot",version:1,spaces:[{id,name,type}],records:[…]}`.
+Records use the same IDs/sections/paise fields on both platforms. All spaces are
+replaced only after validation; invalid restores preserve existing data. Network
+credentials and sync metadata are excluded and need explicit reconnection.
+`fixtures/backup-v1.b64` is a synthetic independently generated interoperability
+fixture; its test-only password is `fixture passphrase only`. Never use that
+password or deterministic fixture salt/nonce for real backups.

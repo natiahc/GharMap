@@ -31,7 +31,8 @@ public final class MainActivity extends Activity {
     private String pendingCsv;
     private String importSpace;
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
-    private static final int EXPORT=10,IMPORT=11,SMS=12;
+    private static final int EXPORT=10,IMPORT=11,SMS=12,BACKUP=13,RESTORE=14;
+    private char[] backupPassword;
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);store=new Store(this);
         if(state!=null) {space=state.getString("space","personal");page=state.getString("page","Overview");month=YearMonth.parse(state.getString("month",YearMonth.now().toString()));}
@@ -43,7 +44,7 @@ public final class MainActivity extends Activity {
         super.onSaveInstanceState(state);state.putString("space",space);state.putString("page",page);state.putString("month",month.toString());
         // Pending SAF actions intentionally abort on recreation rather than export another space.
     }
-    @Override protected void onDestroy(){super.onDestroy();worker.execute(store::close);worker.shutdown();}
+    @Override protected void onDestroy(){super.onDestroy();clearBackupPassword();worker.execute(store::close);worker.shutdown();}
     private void message(String text){new AlertDialog.Builder(this).setTitle("PaisaPilot").setMessage(text).setPositiveButton("OK",null).show();}
     private void error(Exception e){message(e.getMessage()==null?"Could not complete this action":e.getMessage());}
     private String selected(Spinner s){return String.valueOf(s.getSelectedItem());}
@@ -263,10 +264,33 @@ public final class MainActivity extends Activity {
         content.addView(Ui.button(this,"Import PaisaPilot CSV",false,v->{importSpace=space;Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,IMPORT);}));
         content.addView(Ui.button(this,"Export this space's transactions CSV",false,v->export()));
         content.addView(Ui.button(this,"Create household or business space",false,v->newSpace()));
-        note("CSV opens in Google Sheets/Excel and contains transactions only; goals, plans, commitments and holdings are not included. It is not a full backup. Automatic Google sync, live partner sharing and standard bank-statement adapters are not connected.");
+        content.addView(Ui.button(this,"Encrypted full backup",false,v->backupDialog(false)));
+        content.addView(Ui.button(this,"Restore full backup",false,v->backupDialog(true)));
+        note("CSV opens in Google Sheets/Excel and contains transactions only; goals, plans, commitments and holdings are not included. Use encrypted full backup for all records. Automatic Google sync, live partner sharing and standard bank-statement adapters are not connected.");
         note("SMS import is optional, on demand and limited to supported unambiguous formats. Permission may be restricted by Android or store policy. Paste/manual entry works without SMS access. No background chat access.");
         note("Imported records start unreviewed. Match them to statements, remove duplicates from different sources, and correct transfers, loans and card repayments before approving. No claim of complete capture or automatic reconciliation.");
         content.addView(Ui.button(this,"App capabilities",false,v->message("PaisaPilot 0.2 pilot\nOffline INR tracking, review, CSV, planning, separate spaces, goals, holdings and commitments.\nNo live market prices, payment execution, investment orders, tax filing or return guarantees.\nHousehold/business support is local organisation, not remote access control or full accounting.")));
+    }
+    private void clearBackupPassword(){if(backupPassword!=null){Arrays.fill(backupPassword,'\0');backupPassword=null;}}
+    private void backupDialog(boolean restore){
+        LinearLayout f=form();EditText pass=Ui.input(this,f,"Backup passphrase (12–128 English characters)","",false);pass.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        EditText confirm=restore?null:Ui.input(this,f,"Confirm passphrase","",false);if(confirm!=null)confirm.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        CheckBox consent=new CheckBox(this);consent.setText(restore?"Replace ALL local spaces and records with this backup. I have saved any newer data.":"Include ALL spaces, private records, goals, holdings, commitments and plans.");f.addView(consent);
+        f.addView(Ui.text(this,"Keep the passphrase separately. It cannot be recovered. Backups are encrypted; Google credentials and connection state are never included. Restore validates everything and rolls back if invalid.",14,Ui.MUTED));
+        dialog(restore?"Restore all data":"Encrypted backup",f,"Choose file",()->{
+            String password=pass.getText().toString();if(password.length()<12||password.length()>128||!password.matches("[ -~]+"))throw new IllegalArgumentException("Use 12–128 printable English characters");
+            if(confirm!=null&&!password.equals(confirm.getText().toString()))throw new IllegalArgumentException("Passphrases do not match");
+            if(!consent.isChecked())throw new IllegalArgumentException("Confirm the backup/restore scope first");
+            clearBackupPassword();backupPassword=password.toCharArray();pass.setText("");if(confirm!=null)confirm.setText("");
+            Intent i=new Intent(restore?Intent.ACTION_OPEN_DOCUMENT:Intent.ACTION_CREATE_DOCUMENT);i.setType("application/octet-stream");i.addCategory(Intent.CATEGORY_OPENABLE);
+            if(!restore)i.putExtra(Intent.EXTRA_TITLE,"PaisaPilot-"+LocalDate.now()+".paisabackup");startActivityForResult(i,restore?RESTORE:BACKUP);
+        });
+    }
+    private byte[] readFile(Uri uri,int limit)throws IOException{
+        try(InputStream in=getContentResolver().openInputStream(uri)){
+            if(in==null)throw new IOException("Could not read file");ByteArrayOutputStream out=new ByteArrayOutputStream();byte[] buffer=new byte[8192];int n;
+            while((n=in.read(buffer))!=-1){if(out.size()+n>limit)throw new IOException("File exceeds size limit");out.write(buffer,0,n);}return out.toByteArray();
+        }
     }
     private void paste(){LinearLayout f=form();EditText text=Ui.input(this,f,"Paste one transaction alert","",false);text.setSingleLine(false);text.setMinLines(4);
         EditText date=Ui.input(this,f,"Transaction date YYYY-MM-DD",LocalDate.now().toString(),false);
@@ -294,9 +318,16 @@ public final class MainActivity extends Activity {
             pendingCsv=Imports.csv(store.list(space,"Transaction"));Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("text/csv");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"PaisaPilot-"+LocalDate.now()+".csv");startActivityForResult(i,EXPORT);d.dismiss();}));d.show();
     }
     @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);
-        if(result!=RESULT_OK||data==null||data.getData()==null){pendingCsv=null;importSpace=null;return;}
+        if(result!=RESULT_OK||data==null||data.getData()==null){pendingCsv=null;importSpace=null;clearBackupPassword();return;}
         Uri uri=data.getData();
-        if(request==EXPORT){String bytes=pendingCsv;pendingCsv=null;if(bytes==null){message("Export cancelled after app recreation. Please export again.");return;}
+        if(request==BACKUP||request==RESTORE){
+            char[] password=backupPassword;backupPassword=null;if(password==null){message("Action cancelled after app recreation. Please start again.");return;}
+            worker.execute(()->{try{
+                if(request==BACKUP){byte[] encrypted=Backup.encrypt(store.snapshot(),password);try(OutputStream out=getContentResolver().openOutputStream(uri,"wt")){if(out==null)throw new IOException("Could not write backup");out.write(encrypted);}}
+                else store.restore(Backup.decrypt(readFile(uri,Backup.LIMIT),password));
+                runOnUiThread(()->{if(!isDestroyed()){if(request==RESTORE){space="personal";getPreferences(0).edit().putString("space",space).apply();}render();message(request==BACKUP?"Full encrypted backup saved":"All records restored. Cloud connections must be reconnected separately.");}});
+            }catch(Exception e){runOnUiThread(()->{if(!isDestroyed())error(e);});}finally{Arrays.fill(password,'\0');}});
+        }else if(request==EXPORT){String bytes=pendingCsv;pendingCsv=null;if(bytes==null){message("Export cancelled after app recreation. Please export again.");return;}
             worker.execute(()->{try(OutputStream out=getContentResolver().openOutputStream(uri,"wt")){if(out==null)throw new IOException("Could not open destination");out.write(bytes.getBytes(StandardCharsets.UTF_8));runOnUiThread(()->{if(!isDestroyed())message("Transaction CSV exported. Open it with Sheets or Excel.");});}
                 catch(Exception e){runOnUiThread(()->{if(!isDestroyed())error(e);});}});
         }else if(request==IMPORT){String target=importSpace;importSpace=null;if(target==null){message("Import cancelled after app recreation. Please select the file again.");return;}

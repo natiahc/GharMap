@@ -84,7 +84,19 @@ final class Store extends SQLiteOpenHelper {
             throw new IllegalArgumentException("Invalid record identity");
         boolean found=false; for(JSONObject s:spaces()) if(space.equals(s.optString("id"))) found=true;
         if(!found) throw new IllegalArgumentException("Unknown space");
-        if(section.equals("Settings")) return;
+        if(section.equals("Settings")) {
+            if(!id.equals("settings-"+space))throw new IllegalArgumentException("Invalid settings identity");
+            for(String key:new String[]{"takehome","spending","debt","reserveadd","goalsadd","reserves","essentials","retained","initial","riskcap","riskfunded","riskloss","losslimit","paydaycash","dailyspend"})
+                if(r.has(key))amount(r,key);
+            for(String key:new String[]{"months","riskbp","years","returnbp","inflationbp","stepupbp"})
+                if(r.has(key)&&!(r.opt(key) instanceof Integer || r.opt(key) instanceof Long))throw new IllegalArgumentException("Invalid plan value");
+            long months=r.optLong("months",6),risk=r.optLong("riskbp"),years=r.optLong("years",10),rate=r.optLong("returnbp",800),inflation=r.optLong("inflationbp",600),step=r.optLong("stepupbp");
+            if(months<0||months>120||risk<0||risk>10000||years<1||years>60||rate< -9900||rate>5000||inflation<0||inflation>2500||step<0||step>2500)
+                throw new IllegalArgumentException("Plan values out of range");
+            if(r.has("paused")&&!(r.opt("paused") instanceof Boolean))throw new IllegalArgumentException("Invalid pause value");
+            if(r.has("payday"))LocalDate.parse(r.optString("payday"));
+            return;
+        }
         if(r.optString("title").trim().isEmpty() || r.optString("title").length()>300 || r.optString("note").length()>2000)
             throw new IllegalArgumentException("Enter a description (up to 300 characters)");
         LocalDate.parse(r.optString("date")); amount(r,"amount");
@@ -136,6 +148,42 @@ final class Store extends SQLiteOpenHelper {
             }
             db.setTransactionSuccessful(); return added;
         } finally { db.endTransaction(); }
+    }
+    JSONObject snapshot() {
+        SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
+        try {
+            JSONObject out=object();set(out,"format","PaisaPilot");set(out,"version",1);
+            JSONArray scopes=new JSONArray(),records=new JSONArray();
+            for(JSONObject scope:spaces())scopes.put(scope);
+            try(Cursor c=db.rawQuery("SELECT data FROM records ORDER BY id",null)){
+                while(c.moveToNext())try{records.put(new JSONObject(c.getString(0)));}catch(JSONException e){throw new IllegalStateException(e);}
+            }
+            set(out,"spaces",scopes);set(out,"records",records);db.setTransactionSuccessful();return out;
+        } finally{db.endTransaction();}
+    }
+    void restore(JSONObject snapshot) {
+        if(!"PaisaPilot".equals(snapshot.optString("format"))||snapshot.optInt("version")!=1)
+            throw new IllegalArgumentException("Unsupported backup version");
+        JSONArray scopes=snapshot.optJSONArray("spaces"),rows=snapshot.optJSONArray("records");
+        if(scopes==null||rows==null||scopes.length()==0||scopes.length()>100||rows.length()>100000)
+            throw new IllegalArgumentException("Invalid backup record counts");
+        SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
+        try {
+            db.delete("records",null,null);db.delete("spaces",null,null);
+            boolean personal=false;java.util.HashSet<String> scopeIds=new java.util.HashSet<>(),ids=new java.util.HashSet<>();
+            for(int i=0;i<scopes.length();i++){
+                JSONObject scope=scopes.optJSONObject(i);if(scope==null)throw new IllegalArgumentException("Invalid space");
+                String id=scope.optString("id"),name=scope.optString("name"),type=scope.optString("type");
+                if(id.isEmpty()||id.length()>200||name.trim().isEmpty()||name.length()>80||!scopeIds.add(id)||!java.util.Arrays.asList("Personal","Household","Business").contains(type))throw new IllegalArgumentException("Invalid space");
+                if(id.equals("personal")){if(!type.equals("Personal"))throw new IllegalArgumentException("Invalid personal space");personal=true;}
+                ContentValues v=new ContentValues();v.put("id",id);v.put("name",name);v.put("type",type);db.insertOrThrow("spaces",null,v);
+            }
+            if(!personal)throw new IllegalArgumentException("Backup lacks personal space");
+            for(int i=0;i<rows.length();i++){
+                JSONObject row=rows.optJSONObject(i);if(row==null||!ids.add(row.optString("id")))throw new IllegalArgumentException("Invalid or repeated record");put(row);
+            }
+            db.setTransactionSuccessful();
+        }finally{db.endTransaction();}
     }
     void settle(JSONObject commitment, long payment, String date) {
         SQLiteDatabase db=getWritableDatabase();db.beginTransaction();

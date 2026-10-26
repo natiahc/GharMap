@@ -81,6 +81,20 @@ public class FinanceFlowTest {
         try{store.settle(stale,100,LocalDate.now().toString());fail("Settled a stale dialog twice");}catch(IllegalArgumentException expected){}
         assertEquals(9,store.list("personal","Transaction").size());assertEquals(0,store.totals("personal",YearMonth.now())[1]);
     }
+    @Test public void encryptedBackupRestoresAllSectionsAndRejectsTampering()throws Exception{
+        store.put(tx("retained","Income",123,true));
+        JSONObject goal=Store.record("personal","Goal");Store.set(goal,"title","Emergency");Store.set(goal,"amount",10000);Store.set(goal,"saved",29);Store.set(goal,"date","2027-04-01");store.put(goal);
+        JSONObject original=store.snapshot();char[] pass="fixture passphrase only".toCharArray();byte[] backup=Backup.encrypt(original,pass);
+        assertFalse(java.util.Arrays.equals(backup,Backup.encrypt(original,pass)));
+        store.delete("retained");store.restore(Backup.decrypt(backup,pass));assertEquals(1,store.list("personal","Goal").size());assertNotNull(store.get("retained"));
+        try{Backup.decrypt(backup,"wrong passphrase here".toCharArray());fail("Wrong password accepted");}catch(IllegalArgumentException expected){}
+        backup[backup.length-1]^=1;try{Backup.decrypt(backup,pass);fail("Tampered backup accepted");}catch(IllegalArgumentException expected){}
+        JSONObject invalid=Store.copy(original);Store.set(invalid.optJSONArray("records").optJSONObject(0),"amount",-1);
+        try{store.restore(invalid);fail("Invalid backup restored");}catch(IllegalArgumentException expected){}
+        assertNotNull(store.get("retained"));
+        byte[] fixture;try(java.io.InputStream in=InstrumentationRegistry.getInstrumentation().getContext().getAssets().open("backup-v1.b64")){java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream();byte[] b=new byte[1024];int n;while((n=in.read(b))!=-1)out.write(b,0,n);fixture=android.util.Base64.decode(out.toByteArray(),android.util.Base64.DEFAULT);}
+        store.restore(Backup.decrypt(fixture,pass));assertEquals(29,store.get("fixture-29").optLong("amount"));assertNull(store.get("retained"));
+    }
     @Test public void realScreenCreatesTransactionAndSurvivesRecreation(){
         try(ActivityScenario<MainActivity> activity=ActivityScenario.launch(MainActivity.class)){
             onView(withText("Add transaction")).perform(scrollTo(),click());
