@@ -1,6 +1,7 @@
 #include "paisapilot/finance.h"
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 
 using namespace paisapilot;
@@ -12,6 +13,32 @@ template<class F> void rejects(F action) {
     check(failed);
 }
 int main() {
+    // Text boundaries for UI/statement imports must never go through float/double.
+    check(parse_amount("0") == 0 && parse_amount("0.29") == 29);
+    check(parse_amount("123.4") == 12340 && parse_amount("001.01") == 101);
+    check(parse_amount("10000000000000.00") == max_money);
+    check(parse_amount("9999999999999.99") == max_money - 1);
+    for (const char* invalid : {"", ".", ".5", "1.", "-1", "+1", " 1", "1 ",
+         "1,000", "1e2", "NaN", "inf", "1.001", "1..0", "1.2.3", "₹1", "١",
+         "10000000000000.01", "10000000000001", "99999999999999999",
+         "000000000000000000"}) {
+        rejects([&] { parse_amount(invalid); });
+    }
+    rejects([] { parse_amount(std::string_view("1\0.00", 5)); });
+    check(format_amount(0) == "0.00" && format_amount(29) == "0.29");
+    check(format_amount(-29) == "-0.29" && format_amount(-12340) == "-123.40");
+    check(format_amount(-max_money) == "-10000000000000.00");
+    rejects([] { format_amount(std::numeric_limits<Money>::min()); });
+    rejects([] { format_amount(std::numeric_limits<Money>::max()); });
+    for (Money amount : {Money{0}, Money{1}, Money{99}, Money{100}, Money{101},
+                         Money{29000000}, max_money - 1, max_money})
+        check(parse_amount(format_amount(amount)) == amount);
+    // Check every paise value across many decimal boundaries, plus large values.
+    for (Money amount = 0; amount <= 100000; ++amount)
+        check(parse_amount(format_amount(amount)) == amount);
+    for (Money amount = max_money - 10000; amount <= max_money; ++amount)
+        check(parse_amount(format_amount(amount)) == amount);
+
     // Synthetic paise amounts; card purchase and repayment must not double count.
     std::vector<Transaction> ledger = {
         {"salary", "INR", Kind::income, 25000000, true},

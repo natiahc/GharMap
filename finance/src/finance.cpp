@@ -29,6 +29,50 @@ void validate_kind(Kind kind) {
 }
 } // namespace
 
+Money parse_amount(std::string_view decimal) {
+    // Longest valid representation is 10000000000000.00 (16 digits + dot).
+    if (decimal.empty() || decimal.size() > 17)
+        throw std::invalid_argument("Amount must contain decimal digits within supported range");
+    Money whole = 0;
+    Money fraction = 0;
+    unsigned fraction_digits = 0;
+    bool decimal_point = false;
+    bool whole_digit = false;
+    for (char c : decimal) {
+        if (c == '.' && !decimal_point && whole_digit) {
+            decimal_point = true;
+            continue;
+        }
+        if (c < '0' || c > '9')
+            throw std::invalid_argument("Use unsigned decimal digits without grouping");
+        const Money digit = c - '0';
+        if (decimal_point) {
+            if (++fraction_digits > 2)
+                throw std::invalid_argument("Amount supports at most two fractional digits");
+            fraction = fraction * 10 + digit;
+        } else {
+            whole_digit = true;
+            if (whole > (max_money / 100 - digit) / 10)
+                throw std::overflow_error("Amount exceeds supported range");
+            whole = whole * 10 + digit;
+        }
+    }
+    if (!whole_digit || (decimal_point && fraction_digits == 0))
+        throw std::invalid_argument("Amount needs digits before and after a decimal point");
+    if (fraction_digits == 1) fraction *= 10;
+    return add(whole * 100, fraction);
+}
+
+std::string format_amount(Money minor_units) {
+    if (minor_units < -max_money || minor_units > max_money)
+        throw std::invalid_argument("Amount exceeds supported range");
+    const bool negative = minor_units < 0;
+    const Money magnitude = negative ? -minor_units : minor_units;
+    const auto fraction = magnitude % 100;
+    return (negative ? "-" : "") + std::to_string(magnitude / 100) + "." +
+           (fraction < 10 ? "0" : "") + std::to_string(fraction);
+}
+
 Totals summarise(const std::vector<Transaction>& transactions, const std::string& currency) {
     if (currency.size() != 3 || !std::all_of(currency.begin(), currency.end(),
         [](char c) { return c >= 'A' && c <= 'Z'; }))

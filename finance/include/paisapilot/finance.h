@@ -3,12 +3,20 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace paisapilot {
 // One currency per ledger. Money is integer minor units (INR: paise).
 using Money = std::int64_t;
 constexpr Money max_money = 1'000'000'000'000'000;
+
+// Exact decimal conversion for currencies with two minor-unit digits (e.g. INR).
+// Input: unsigned ASCII digits, optionally '.' and one or two fractional digits.
+// No whitespace, grouping, signs, exponents, currency symbols or silent rounding.
+Money parse_amount(std::string_view decimal);
+// Canonical two-decimal output; signed net totals are supported within +/-max_money.
+std::string format_amount(Money minor_units);
 
 enum class Kind {
     income, expense, expense_refund, transfer, card_repayment,

@@ -56,6 +56,12 @@ address/undefined-behaviour sanitizers; CI runs them independently of Android.
 The standalone `finance/CMakeLists.txt` can also build the library and tests.
 
 - All amounts use integer minor units (paise for INR), with range/overflow checks.
+  `parse_amount` converts plain unsigned decimal text exactly for currencies with
+  two minor-unit digits; it rejects grouping, signs, whitespace, exponents,
+  excess precision and out-of-range values instead of rounding. `format_amount`
+  produces two-decimal text and supports negative net totals. Localised display
+  and statement adapters must normalise their own formats before parsing;
+  currencies with zero or three minor-unit digits need separate conversion.
 - Reporting accepts one currency and a caller-selected period. Only reviewed
   records count; exact repeated IDs count once and conflicting IDs fail.
   Stable IDs must be assigned by capture/reconciliation: different IDs are not
