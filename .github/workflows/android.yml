@@ -59,6 +59,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
             ./gradlew --no-daemon :app:connectedDebugAndroidTest
+            bash scripts/test_live_sms.sh
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             adb shell am start -W -n com.paisapilot.app/.MainActivity
             adb shell screencap -p /sdcard/paisapilot-home.png
@@ -106,7 +107,7 @@ jobs:
           import hashlib
           apk=next(Path('package').glob('PaisaPilot-*.apk'))
           notes=('Android pilot build. Paste financial alerts, CSV import, manual records, planning and encrypted backups are available. '
-                 'This pilot does not request SMS inbox access. Keep Play Protect enabled; device acceptance is still subject to its checks. '
+                 'The live pilot requests READ_SMS/RECEIVE_SMS for opt-in financial capture. Internet-sideloading may be blocked by Play Protect; use an approved testing/distribution route. '
                  'Google Sheets connections require your OAuth/API setup.\n\nAPK SHA-256: '+hashlib.sha256(apk.read_bytes()).hexdigest()+'\n')
           Path('package/release-notes.txt').write_text(notes)
           PY

@@ -12,8 +12,8 @@ budget allocation and growth projections. No app-operated backend, analytics or 
   account labels and ownership labels. Imported records start unreviewed.
 - Separate income, purchases, refunds, transfers, card repayments, borrowing,
   loan principal and investment principal. No double counting card repayments.
-- Explicit paste/import for one shared financial alert with conservative
-  supported-format parsing. No SMS-inbox permission or background inbox access.
+- Opt-in live incoming SMS capture, on-demand inbox import and pasted financial
+  alerts, using one conservative candidate parser and review flow.
   OTP/authentication messages, future-payment messages and ambiguous multi-amount
   messages are skipped. Raw message bodies are not saved. Manual review is vital.
 - Exact-decimal transaction CSV import/export through Android's file picker.
@@ -53,16 +53,16 @@ Arbitrary bank statement adapters, receipts/OCR, recurring notifications and tax
 filing remain unimplemented. Legacy geometry code under `core/` is unused.
 
 Chats require explicit paste/share; there is no background conversation access.
-Inbox scanning is excluded from the pilot because Internet-sideloaded apps
-requesting SMS access can be blocked by Play Protect. Store publication and
+Full SMS capture is retained. Internet-sideloaded apps requesting SMS access
+can be blocked by Play Protect. Store publication and
 SMS policy approval have not been obtained. This debug APK is for sideload testing.
 Android 8+ is required; compatibility with every device is not established.
 
 ## Privacy and data ownership
 
 Records live in app-private SQLite storage; Android backup is disabled. Internet permission supports optional Google-authorized sync; no camera
-permission is requested. SMS, notification-listener and accessibility access are
-not requested. Device security remains important; there
+permission is requested. SMS reading/receiving permissions are requested only for enabled capture/import;
+notification-listener and accessibility access are not requested. Device security remains important; there
 is no separate app database encryption or app lock yet.
 
 CSV exports are readable by recipients and contain selected-space transactions,
@@ -173,14 +173,29 @@ Live OAuth, permissions and multi-device API testing remain required after the
 Cloud project is configured. Automated tests exercise protocol merges, conflicts,
 deletions, private-space collision protection and restore disconnect behavior.
 
-## Android installation correction — 0.3.1
+## Live Android capture — 0.4.0
 
-The earlier pilot declared `READ_SMS`, which can trigger Play Protect's enhanced
-fraud-protection block for Internet-sideloaded apps. Version 0.3.1 removes that
-permission and the inbox-scanning UI/runtime path. Pasted alert parsing, CSV,
-manual entry, finance planning, encrypted backups and optional Google sync remain.
-Do not disable Play Protect to install the pilot. A device acceptance test is
-still needed; removing this known trigger does not guarantee a security verdict.
-Tests inspect the packaged application's permission list to prevent reintroducing
-SMS/interception permissions. Future inbox access needs an approved distribution
-and platform-policy path; do not substitute notification/accessibility scraping.
+The full-feature build retains `READ_SMS` and adds `RECEIVE_SMS` for opt-in live
+capture, as requested. Enable it in Data after reading the disclosure and granting
+permissions. A protected system SMS receiver processes supported incoming alerts
+in the background; candidates are saved to Personal, unreviewed. Open screens
+refresh when records arrive. OTP/authentication content and raw SMS bodies are
+not stored. Stop capture in Data or revoke permission in Android settings.
+
+Capture and history import share IDs when message sender, body and sent timestamp
+match. Missing timestamps, unsupported/ambiguous formats and cross-source imports
+still need statement reconciliation. Android force-stop and device policy can
+prevent delivery; this is not a promise of complete capture on every model.
+Google Sheets auto-sync remains foreground polling, not instant cross-device push.
+
+Play Protect can block Internet-sideloaded APKs with SMS permissions. Rebuilding,
+renaming or changing the signing key is not an approved-distribution substitute.
+Google Play policy lists SMS-based money management as a potential exception,
+subject to declaration/review. A Play Console testing/review setup is needed for
+that route. No store approval is claimed; keep Play Protect enabled. Version
+0.3.1 was the reduced-permission test build; 0.4.0 supersedes it for full capture.
+
+CI tests the opt-in/deduplication pipeline and injects a synthetic SMS into an
+emulator to verify the actual system receiver. Run `bash scripts/test_live_sms.sh`
+after connected tests with emulator/test APKs installed. Tests clear app data;
+use an emulator rather than a phone containing your records.

@@ -7,8 +7,8 @@ android {
         applicationId = "com.paisapilot.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.3.1-pilot"
+        versionCode = 5
+        versionName = "0.4.0-live-pilot"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
         externalNativeBuild { cmake { cppFlags += listOf("-std=c++17", "-Wall", "-Wextra") } }

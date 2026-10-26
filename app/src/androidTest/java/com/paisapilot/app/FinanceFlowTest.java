@@ -23,7 +23,7 @@ public class FinanceFlowTest {
     private Context context;
     private Store store;
     @Before public void setup(){context=InstrumentationRegistry.getInstrumentation().getTargetContext();context.deleteDatabase("paisapilot.db");store=new Store(context);}
-    @After public void teardown(){store.close();context.deleteDatabase("paisapilot.db");}
+    @After public void teardown(){SmsCapture.enable(context,false);store.close();context.deleteDatabase("paisapilot.db");}
     private JSONObject tx(String id,String kind,long amount,boolean reviewed){
         JSONObject r=Store.record("personal","Transaction");Store.set(r,"id",id);Store.set(r,"title",id);Store.set(r,"kind",kind);Store.set(r,"amount",amount);
         Store.set(r,"date",LocalDate.now().toString());Store.set(r,"currency","INR");Store.set(r,"reviewed",reviewed);return r;
@@ -130,11 +130,21 @@ public class FinanceFlowTest {
         JSONObject r=tx("remote-new","Income",2900,true);SyncProtocol.Result result=new SyncProtocol.Result();result.incoming.put("remote-new",SyncProtocol.canonical(SyncProtocol.portable(r)));
         store.applySync(shared,sheet,SyncProtocol.fingerprint(Collections.emptyMap()),result);assertFalse(store.get("remote-new").optBoolean("reviewed"));assertEquals(0,store.totals(shared,YearMonth.now())[0]);assertEquals(1,store.totals(shared,YearMonth.now())[3]);
     }
-    @Test public void pilotDoesNotRequestSensitiveInboxOrInterceptionPermissions()throws Exception{
+    @Test public void livePilotRetainsSmsPermissionsAndProtectsItsReceiver()throws Exception{
         android.content.pm.PackageInfo info=context.getPackageManager().getPackageInfo(context.getPackageName(),android.content.pm.PackageManager.GET_PERMISSIONS);
         Set<String> permissions=new HashSet<>(Arrays.asList(info.requestedPermissions==null?new String[0]:info.requestedPermissions));
-        for(String permission:new String[]{"android.permission.READ_SMS","android.permission.RECEIVE_SMS","android.permission.SEND_SMS","android.permission.READ_CALL_LOG","android.permission.BIND_NOTIFICATION_LISTENER_SERVICE","android.permission.BIND_ACCESSIBILITY_SERVICE"})
-            assertFalse("Pilot must not declare "+permission,permissions.contains(permission));
+        assertTrue(permissions.contains("android.permission.READ_SMS"));assertTrue(permissions.contains("android.permission.RECEIVE_SMS"));
+        assertFalse(permissions.contains("android.permission.SEND_SMS"));assertFalse(permissions.contains("android.permission.BIND_ACCESSIBILITY_SERVICE"));
+        android.content.pm.ActivityInfo receiver=context.getPackageManager().getReceiverInfo(new android.content.ComponentName(context,SmsReceiver.class),0);
+        assertEquals("android.permission.BROADCAST_SMS",receiver.permission);
+    }
+    @Test public void liveCaptureNeedsOptInDeduplicatesAndExcludesOtp(){
+        long timestamp=System.currentTimeMillis();SmsCapture.enable(context,false);
+        assertEquals(0,SmsCapture.ingest(context,"INR 29.00 debited","bank",timestamp));
+        SmsCapture.enable(context,true);assertEquals(1,SmsCapture.ingest(context,"INR 29.00 debited","bank",timestamp));
+        assertEquals(0,SmsCapture.ingest(context,"INR 29.00 debited","bank",timestamp));
+        assertEquals(0,SmsCapture.ingest(context,"OTP 123456 for INR 29 paid","bank",timestamp));
+        assertEquals(0,store.totals("personal",YearMonth.now())[1]);assertEquals(1,store.totals("personal",YearMonth.now())[3]);
     }
     @Test public void realScreenCreatesTransactionAndSurvivesRecreation(){
         try(ActivityScenario<MainActivity> activity=ActivityScenario.launch(MainActivity.class)){

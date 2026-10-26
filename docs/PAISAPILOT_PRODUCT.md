@@ -110,7 +110,7 @@ shared C++ calculation engine. Android uses SQLite; iPhone uses protected atomic
 storage. A versioned full snapshot and AES-GCM/PBKDF2 encrypted backup format
 supports cross-platform restore, with independent interoperability fixtures.
 
-Android implements manual/reviewed transactions, conservative pasted-alert import (no inbox permission),
+Android implements manual/reviewed transactions, conservative SMS/pasted-alert capture with explicit opt-in,
 CSV interchange, local spaces, goals, holdings, loan/bill settlements, contribution
 splits, payday/risk/emergency/income-loss/retirement scenarios. iPhone implements
 manual/reviewed transactions, spaces, goals, holdings, settlements and financial
@@ -132,3 +132,7 @@ Pending: iPhone Google sync/CSV import, arbitrary bank statement adapters,
 receipt OCR, recurring reminders, closed-app background sync and tax/accounting
 features. Real iPhone installation/TestFlight needs Apple signing credentials.
 Store policy review and cloud consent/verification remain deployment work.
+
+The Android live pilot includes protected incoming-SMS reception and shared
+review/deduplication with inbox import. Real device delivery and approved SMS
+distribution remain required; emulator tests do not establish Play approval.
