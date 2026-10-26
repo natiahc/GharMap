@@ -153,8 +153,16 @@ struct BinaryFile:FileDocument {
 struct DataScreen:View {
     @EnvironmentObject var store:FinanceStore
     @Binding var space:String
-    @State private var password="",confirmation="",consent=false,busy=false,exporting=false,importing=false
-    @State private var file=BinaryFile(),newName="",newType="Household",notice:String?
+    @State private var password=""
+    @State private var confirmation=""
+    @State private var consent=false
+    @State private var busy=false
+    @State private var exporting=false
+    @State private var importing=false
+    @State private var file=BinaryFile()
+    @State private var newName=""
+    @State private var newType="Household"
+    @State private var notice:String?
     var body:some View{NavigationStack{Form{
         Section{SpacePicker(space:$space);Text("Local protected storage. Backups contain ALL spaces; keep them and their passphrase private. No Google credentials are included.").font(.footnote)}
         Section("Encrypted full backup / restore"){
