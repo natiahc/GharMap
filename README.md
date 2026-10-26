@@ -2,88 +2,88 @@
 
 **Your money. Your plan. Your breathing room.**
 
-PaisaPilot is the new direction for this repository: an Android-first personal
-finance planner with on-device transaction capture, records in the user's own
-Google Sheets, and optional household sharing.
+An Android-first, offline INR finance pilot. Native Java screens and SQLite
+storage share one C++17 engine for exact money conversion, accounting totals,
+budget allocation and growth projections. No backend, analytics or cloud AI.
 
-## Current status
+## Working in the Android pilot
 
-The first platform-independent C++17 finance core is implemented and tested.
-It calculates reviewed income/expense totals, monthly contribution budgets and
-emergency runway. It is not yet connected to Android or iOS screens.
-Transaction capture, Google authorization, spreadsheet sync and sharing remain
-unimplemented.
+- Manual transactions, review/correction/deletion, month selection, categories,
+  account labels and ownership labels. Imported records start unreviewed.
+- Separate income, purchases, refunds, transfers, card repayments, borrowing,
+  loan principal and investment principal. No double counting card repayments.
+- Explicit on-demand Android SMS import (last 30 days, at most 500 messages),
+  conservative supported-format parsing, and paste/import for one shared alert.
+  OTP/authentication messages, future-payment messages and ambiguous multi-amount
+  messages are skipped. Raw message bodies are not saved. Manual review is vital.
+- Exact-decimal transaction CSV import/export through Android's file picker.
+  Exports open in Google Sheets/Excel; text cells are escaped against formulas.
+  Stable-ID duplicates are skipped; conflicts reject the entire import.
+- Local personal, household and business spaces. Copy selected transactions to
+  another space only after approval; copied records need review. Export only
+  the selected space. Equal or income/custom-weight household cost calculator.
+- Goals with target/saved amounts, deadline and no-growth monthly requirement.
+- Manual investment holdings with cost, valuation date and unrealised change.
+- One-off bills, card bills, EMI principal, loans taken, money lent and tasks.
+  Partial/full settlement updates the outstanding amount and records the correct
+  principal/expense transaction atomically. Interest must be entered separately.
+- Monthly long-term/risk contribution scenarios, essential-expense reserves,
+  emergency gap, no-income/one-income runway, risk funding cap and loss pause.
+- Retirement growth scenarios with visible annual return, inflation, contribution
+  step-up and horizon assumptions. Rates are user-editable, not predictions.
 
-GharMap room-scanning development has been discontinued. Its Android/iOS source,
-geometry engine, build scripts and existing workflows remain temporarily as
-legacy code; building them still produces the GharMap prototype, not PaisaPilot.
-Existing architecture and device-test documents describe that legacy project.
-Git history is preserved.
+## Important boundaries
 
-## Planned first release
+This is a pilot, not complete accounting, investment advice or trade execution.
+It does not place investments, promise returns, fetch live prices or enforce a
+broker's loss limits. Plan amounts and risk headroom are entered manually; keep
+funding/losses current. Holdings/goals do not automatically become transactions.
+Recorded income/spending is not a reconciled account balance.
 
-- Parse supported financial SMS on Android with permission and platform approval.
-- Review uncertain transactions and handle refunds, transfers and card repayments.
-- Sync structured records to an editable Google Sheet owned by the user.
-- Track upcoming card bills, EMIs and household commitments.
-- Estimate money available until payday and emergency savings runway.
-- Invite a partner and share only explicitly selected household information.
+**Not implemented:** Google authorization and automatic Sheets sync, cross-device
+partner invitations/access/revocation, statement adapters for arbitrary banks,
+receipts/OCR, recurring notifications, full backups, tax filing and iPhone finance
+screens. The `ios/`, `core/` and old geometry documents are legacy GharMap code;
+the Android app no longer depends on them. Legacy iOS builds are not PaisaPilot.
 
-Later phases cover investments, money lent/borrowed, business expenses and
-financial tasks. These are roadmap items, not shipped capabilities.
+Chats require explicit paste/share; there is no background conversation access.
+SMS access is optional and may be denied or restricted. Store publication and
+SMS policy approval have not been obtained. This debug APK is for sideload testing.
+Android 8+ is required; compatibility with every device is not established.
 
-## Data ownership
+## Privacy and data ownership
 
-The intended design stores financial records on the device and in the user's
-Google account, without a PaisaPilot-operated central financial database.
-Google stores synced spreadsheets. Partner sharing is optional and requires
-each person's explicit agreement. Cloud AI, if introduced, requires a separate
-choice before sending financial information.
+Records live in app-private SQLite storage; Android backup is disabled. No
+Internet or camera permission is requested. SMS permission is requested only
+when the user chooses inbox import. Device security remains important; there
+is no separate app database encryption or app lock yet.
 
-See the [product brief and phased roadmap](docs/PAISAPILOT_PRODUCT.md).
+CSV exports are readable by recipients and contain selected-space transactions,
+including notes and pending entries. They exclude other spaces. They do not
+include goals, plans, holdings or commitments and are **not a complete backup**.
+Uninstalling deletes local records. External edits with conflicting IDs require
+manual reconciliation rather than silent replacement. Different IDs/sources
+may still represent the same transaction; verify against statements.
 
-## Next implementation milestone
+## Build and verify
 
-Connect the finance core to an offline transaction-review flow, then add
-tested Android SMS parsing. Retire the legacy scanning app through explicit,
-reviewable migration commits. Add Google Sheets sync after local accounting and
-deduplication are reliable.
+JDK 17, Android SDK 35, NDK 27.2.12479018 and CMake 3.22.1:
 
-## Finance core
+```sh
+./gradlew :app:assembleDebug :app:lintDebug
+./gradlew :app:connectedDebugAndroidTest
+bash scripts/test_finance.sh
+```
 
-Run `bash scripts/test_finance.sh` with a C++17 compiler on Linux. The checks use
-address/undefined-behaviour sanitizers; CI runs them independently of Android.
-The standalone `finance/CMakeLists.txt` can also build the library and tests.
+APK: `app/build/outputs/apk/debug/app-debug.apk` (CI artifact: `PaisaPilot-debug`).
+Android CI compiles arm64, armv7 and x86_64, runs lint and exercises the app on an
+API-30 emulator. Tests cover review, accounting, exact CSV round trips, conflicts,
+space isolation, loan/card settlements and real-screen persistence.
 
-- All amounts use integer minor units (paise for INR), with range/overflow checks.
-  `parse_amount` converts plain unsigned decimal text exactly for currencies with
-  two minor-unit digits; it rejects grouping, signs, whitespace, exponents,
-  excess precision and out-of-range values instead of rounding. `format_amount`
-  produces two-decimal text and supports negative net totals. Localised display
-  and statement adapters must normalise their own formats before parsing;
-  currencies with zero or three minor-unit digits need separate conversion.
-- Reporting accepts one currency and a caller-selected period. Only reviewed
-  records count; exact repeated IDs count once and conflicting IDs fail.
-  Stable IDs must be assigned by capture/reconciliation: different IDs are not
-  automatically recognised as the same economic transaction.
-- Purchases count as expenses; card repayments, account transfers, borrowed
-  principal and investment principal do not count as income/expenses. Interest,
-  fees and realised investment gains need separate income/expense records.
-  Refunds are separate and can produce negative net expenses for a period.
-  These totals are not an account-balance reconciliation or cash-flow statement.
-- The budget uses take-home pay minus spending, debt payments, reserve saving
-  and other goal contributions. Enter spending excluding debt payments and
-  contributions to avoid double counting. A deficit produces no investment
-  allocation. Accessible reserves never become monthly income.
-- The user chooses a risk percentage (basis points); zero is the default.
-  Risk contributions cannot exceed supplied remaining funding headroom, and
-  pause mode redirects that contribution to long-term savings. The caller must
-  persist and decrement headroom across months; the calculator holds no state
-  and cannot enforce broker limits or stop losses.
-- Runway uses accessible reserves divided by essential monthly outgoings,
-  including essential debt payments. Zero outgoings returns unknown runway.
-  Keep credit limits, market-dependent investments and expected repayments out
-  of accessible reserves. Reserve duration is configurable (default six months).
+The finance core also builds independently with `finance/CMakeLists.txt`.
+Integer money is paise, capped at 10^15 paise. Exact parsing supports currencies
+with two minor-unit digits; the pilot itself accepts INR only. Projections use
+effective annual return, end-of-month contributions and annual step-ups, round
+down to paise, and exclude taxes/fees, market variability and withdrawals.
 
-The calculations are scenarios, not product recommendations, return forecasts
-or trade execution. Only synthetic fixtures are committed.
+See [the product roadmap](docs/PAISAPILOT_PRODUCT.md) for the longer-term scope.

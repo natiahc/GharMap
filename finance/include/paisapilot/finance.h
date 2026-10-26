@@ -69,4 +69,10 @@ struct Budget {
 // A scenario calculator, not a return forecast or investment recommendation.
 // Reserves are not added to monthly income. Negative or out-of-range inputs fail.
 Budget plan(const BudgetInput& input);
+struct Projection { Money nominal; Money real; };
+// End-of-month contributions, effective annual rates, annual contribution step-up.
+// Rates in basis points; return -99%..50%, inflation/step-up 0%..25%, horizon 1..60.
+// Rounded down to paise. Rejects overflow; excludes taxes/fees and market variability.
+Projection project(Money initial, Money monthly, int years, int returns,
+                   int inflation, int stepup);
 } // namespace paisapilot

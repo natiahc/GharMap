@@ -1,6 +1,7 @@
 #include "paisapilot/finance.h"
 
 #include <algorithm>
+#include <cmath>
 #include <stdexcept>
 #include <unordered_map>
 
@@ -131,5 +132,22 @@ Budget plan(const BudgetInput& input) {
         out.runway_months = static_cast<double>(input.accessible_reserves) /
                             static_cast<double>(input.essential_monthly_outgoings);
     return out;
+}
+Projection project(Money initial, Money monthly, int years, int returns,
+                   int inflation, int stepup) {
+    validate(initial); validate(monthly);
+    if (years < 1 || years > 60 || returns < -9900 || returns > 5000 ||
+        inflation < 0 || inflation > 2500 || stepup < 0 || stepup > 2500)
+        throw std::invalid_argument("Projection inputs outside supported range");
+    const long double growth = std::pow(1.0L + returns / 10000.0L, 1.0L / 12.0L);
+    long double balance = initial, contribution = monthly;
+    for (int month = 0; month < years * 12; ++month) {
+        if (month > 0 && month % 12 == 0) contribution *= 1.0L + stepup / 10000.0L;
+        balance = balance * growth + contribution;
+        if (!std::isfinite(balance) || balance > max_money || contribution > max_money)
+            throw std::overflow_error("Projection exceeds supported range");
+    }
+    const auto real = balance / std::pow(1.0L + inflation / 10000.0L, years);
+    return {static_cast<Money>(std::floor(balance)), static_cast<Money>(std::floor(real))};
 }
 } // namespace paisapilot

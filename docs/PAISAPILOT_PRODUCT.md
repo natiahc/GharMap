@@ -103,12 +103,23 @@ The first household pilot should test whether users trust the totals, retain
 capture permissions, return to planning and are willing to pay. Demand, revenue,
 store approval, domain and trademark availability remain unvalidated.
 
-## Migration status
+## Implementation status — Android pilot
 
-The legacy GharMap application and workflows remain in place. A standalone
-C++17 finance core now implements reviewed transaction totals, monthly budgets,
-emergency runway and user-selected risk allocation with a funding cap/pause.
-It has sanitizer-backed tests and CI, but no finance UI or persistent ledger yet.
-Subsequent migration must
-replace scanning permissions, dependencies, app identity, screens, tests and CI
-before any build can be described as a PaisaPilot application.
+The Android GharMap app has been replaced with a native PaisaPilot pilot using
+local SQLite records and the shared C++ finance engine. See README for the exact
+working feature list and testing commands. Legacy iOS/geometry code is retained
+but is not used by Android and is not an iPhone finance implementation.
+
+Implemented locally: manual/reviewed transactions, conservative on-demand SMS and
+paste import, exact CSV interchange, separate spaces and approved local copies,
+goals, holdings, commitments/loan settlements, contribution splits, budget/risk
+planning, income-loss runway and retirement growth scenarios.
+
+Still pending: automatic Google Sheets sync with conflict handling and OAuth,
+remote household invitations and access control, arbitrary bank statement
+formats, notifications/recurrence, full backup/restore and iPhone finance UI.
+Local spaces and CSV export are not substitutes for those integrations.
+
+The app deliberately requests no network permission or cloud credentials. Do not
+add a fake sync state, imply remote sharing, or publish SMS access without the
+required platform-policy review. All import fixtures are synthetic.

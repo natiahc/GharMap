@@ -113,5 +113,17 @@ int main() {
     in.monthly_debt_payments = 1;
     rejects([&] { plan(in); });
     check(plan(BudgetInput{}).monthly_surplus == 0);
+    check(project(10000, 1000, 1, 0, 0, 0).nominal == 22000);
+    check(project(10000, 1000, 1, 0, 0, 0).real == 22000);
+    check(project(0, 1000, 2, 0, 0, 1000).nominal == 25200);
+    auto growth = project(1000000, 0, 1, 1000, 1000, 0);
+    check(std::abs(growth.nominal - 1100000) <= 1 && std::abs(growth.real - 1000000) <= 1);
+    check(project(1000000, 0, 1, -5000, 0, 0).nominal <= 500000);
+    rejects([] { project(0, 0, 0, 0, 0, 0); });
+    rejects([] { project(0, 0, 61, 0, 0, 0); });
+    rejects([] { project(0, 0, 1, -10000, 0, 0); });
+    rejects([] { project(0, 0, 1, 0, -1, 0); });
+    rejects([] { project(0, 0, 1, 0, 0, 2501); });
+    rejects([] { project(max_money, 1, 1, 5000, 0, 0); });
     std::cout << "PaisaPilot finance checks passed\n";
 }
