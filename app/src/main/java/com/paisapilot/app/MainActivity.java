@@ -286,7 +286,7 @@ public final class MainActivity extends Activity {
     }
     private void cloudScreen(){
         JSONObject link=store.cloudLink(space);LinearLayout f=form();final String target=space;
-        f.addView(Ui.text(this,"Optional Google-hosted sync. Only this selected space is sent, including its existing history, goals, holdings, notes and plan. Other spaces remain private. Received transactions require local review.",14,Ui.MUTED));
+        f.addView(Ui.text(this,"Optional Google-hosted sync. Only this selected space is sent, including its existing history, goals, holdings, notes and plan. Other spaces remain private. Received transactions require local review. Google authorization includes spreadsheet-wide scope; this app targets only the connected file.",14,Ui.MUTED));
         if(link==null){EditText sheet=Ui.input(this,f,"Existing PaisaPilot spreadsheet link (blank creates one)","",false);
             CheckBox consent=new CheckBox(this);consent.setText("I approve syncing ALL current and future records in this selected space to Google and its collaborators.");f.addView(consent);
             dialog("Connect selected space",f,"Authorize & connect",()->{if(!consent.isChecked())throw new IllegalArgumentException("Approve the sync scope first");String value=sheet.getText().toString().trim();if(!value.isEmpty())SheetsClient.sheetId(value);
@@ -324,8 +324,8 @@ public final class MainActivity extends Activity {
         LinearLayout f=form();f.addView(Ui.text(this,"Concurrent versions of "+conflict.record+". Choose which record should become the shared version. No version is silently discarded.",14,Ui.MUTED));
         RadioGroup radio=new RadioGroup(this);List<String> ids=new ArrayList<>();ids.add("LOCAL");List<String> payloads=new ArrayList<>();payloads.add(conflict.local);
         for(SyncProtocol.Event e:conflict.remote){ids.add(e.id);payloads.add(e.payload);}
-        for(int i=0;i<ids.size();i++){RadioButton b=new RadioButton(this);b.setId(i+100);b.setText((i==0?"This device":"Cloud revision "+ids.get(i))+"\n"+payloads.get(i));radio.addView(b);}f.addView(radio);
-        dialog("Review sync conflict",f,"Use selected version",()->{int index=radio.getCheckedRadioButtonId()-100;if(index<0||index>=ids.size())throw new IllegalArgumentException("Choose a version after reviewing it");Map<String,String> next=new HashMap<>(choices);next.put(conflict.record,ids.get(index));sync(target,true,next);});
+        List<Integer> viewIds=new ArrayList<>();for(int i=0;i<ids.size();i++){RadioButton b=new RadioButton(this);int viewId=View.generateViewId();viewIds.add(viewId);b.setId(viewId);b.setText((i==0?"This device":"Cloud revision "+ids.get(i))+"\n"+payloads.get(i));radio.addView(b);}f.addView(radio);
+        dialog("Review sync conflict",f,"Use selected version",()->{int index=viewIds.indexOf(radio.getCheckedRadioButtonId());if(index<0||index>=ids.size())throw new IllegalArgumentException("Choose a version after reviewing it");Map<String,String> next=new HashMap<>(choices);next.put(conflict.record,ids.get(index));sync(target,true,next);});
     }
     private void autoSyncTick(){
         if(!resumed||isDestroyed())return;

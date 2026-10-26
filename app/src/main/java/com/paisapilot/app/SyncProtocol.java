@@ -17,7 +17,7 @@ final class SyncProtocol {
         throw new IllegalArgumentException("Unsupported sync value");
     }
     static String logicalId(JSONObject row){return row.optString("section").equals("Settings")?"settings":row.optString("id");}
-    static JSONObject portable(JSONObject row){JSONObject p=Store.copy(row);p.remove("space");p.remove("reviewed");p.remove("source");Store.set(p,"id",logicalId(row));return p;}
+    static JSONObject portable(JSONObject row){if(row.optString("id").equals("settings")&&!row.optString("section").equals("Settings"))throw new IllegalArgumentException("Reserved cloud plan ID; rename the imported record before syncing");JSONObject p=Store.copy(row);p.remove("space");p.remove("reviewed");p.remove("source");Store.set(p,"id",logicalId(row));return p;}
     static Map<String,String> local(List<JSONObject> rows){Map<String,String> result=new TreeMap<>();for(JSONObject r:rows)if(result.put(logicalId(r),canonical(portable(r)))!=null)throw new IllegalArgumentException("Record IDs collide with the reserved plan identity");return result;}
     static String fingerprint(Map<String,String> rows){JSONObject root=Store.object();for(Map.Entry<String,String> r:rows.entrySet())Store.set(root,r.getKey(),r.getValue());return Imports.hash(canonical(root));}
     static final class Event {

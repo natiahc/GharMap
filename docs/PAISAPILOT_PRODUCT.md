@@ -103,23 +103,32 @@ The first household pilot should test whether users trust the totals, retain
 capture permissions, return to planning and are willing to pay. Demand, revenue,
 store approval, domain and trademark availability remain unvalidated.
 
-## Implementation status — Android pilot
+## Implementation status — Android and iPhone pilots
 
-The Android GharMap app has been replaced with a native PaisaPilot pilot using
-local SQLite records and the shared C++ finance engine. See README for the exact
-working feature list and testing commands. Legacy iOS/geometry code is retained
-but is not used by Android and is not an iPhone finance implementation.
+Both legacy scanning apps have been replaced with native finance screens and a
+shared C++ calculation engine. Android uses SQLite; iPhone uses protected atomic
+storage. A versioned full snapshot and AES-GCM/PBKDF2 encrypted backup format
+supports cross-platform restore, with independent interoperability fixtures.
 
-Implemented locally: manual/reviewed transactions, conservative on-demand SMS and
-paste import, exact CSV interchange, separate spaces and approved local copies,
-goals, holdings, commitments/loan settlements, contribution splits, budget/risk
-planning, income-loss runway and retirement growth scenarios.
+Android implements manual/reviewed transactions, conservative SMS/paste import,
+CSV interchange, local spaces, goals, holdings, loan/bill settlements, contribution
+splits, payday/risk/emergency/income-loss/retirement scenarios. iPhone implements
+manual/reviewed transactions, spaces, goals, holdings, settlements and financial
+planning. Android-specific SMS capture is not claimed on iPhone.
 
-Still pending: automatic Google Sheets sync with conflict handling and OAuth,
-remote household invitations and access control, arbitrary bank statement
-formats, notifications/recurrence, full backup/restore and iPhone finance UI.
-Local spaces and CSV export are not substitutes for those integrations.
+Android Google integration implements authorization, sheet create/join, record
+sync, explicit version-conflict resolution, foreground auto-sync and collaborator
+writer access/revocation. It requires Cloud OAuth registration, enabled APIs and
+live account/device testing before being described as validated. Tokens are not
+persisted. Received transactions require local review. Other spaces are excluded.
 
-The app deliberately requests no network permission or cloud credentials. Do not
-add a fake sync state, imply remote sharing, or publish SMS access without the
-required platform-policy review. All import fixtures are synthetic.
+Sync uses an append-only journal; custom reports may be created in separate tabs.
+Direct arbitrary spreadsheet-cell transaction editing is not supported. User
+choices resolve concurrent versions instead of a silent last-writer overwrite.
+Automatic sync only runs while the app is open. Connections are cleared by full
+restore. Revocation cannot retract downloaded copies.
+
+Pending: iPhone Google sync/CSV import, arbitrary bank statement adapters,
+receipt OCR, recurring reminders, closed-app background sync and tax/accounting
+features. Real iPhone installation/TestFlight needs Apple signing credentials.
+Store policy review and cloud consent/verification remain deployment work.
