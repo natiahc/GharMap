@@ -20,6 +20,10 @@ jobs:
         run: |
           simulator_id=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for devices in d["devices"].values() for x in devices if x.get("isAvailable") and "iPhone" in x["name"]))')
           xcodebuild -project PaisaPilot.xcodeproj -scheme PaisaPilot -destination "platform=iOS Simulator,id=$simulator_id" -configuration Debug -derivedDataPath build CODE_SIGNING_ALLOWED=NO test
+          xcrun simctl install "$simulator_id" build/Build/Products/Debug-iphonesimulator/PaisaPilot.app
+          xcrun simctl launch "$simulator_id" com.paisapilot.app
+          sleep 1
+          xcrun simctl io "$simulator_id" screenshot build/paisapilot-iphone.png
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -29,3 +33,7 @@ jobs:
         with:
           name: PaisaPilot-iPhone-simulator
           path: ios/build/Build/Products/Debug-iphonesimulator/PaisaPilot.app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: iPhone-finance-screen
+          path: ios/build/paisapilot-iphone.png

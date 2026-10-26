@@ -117,6 +117,19 @@ public class FinanceFlowTest {
         assertEquals(1000,store.get("private").optLong("amount"));assertTrue(store.list(shared,"Transaction").isEmpty());
         JSONObject snapshot=store.snapshot();store.restore(snapshot);assertNull(store.cloudLink(shared));
     }
+    @Test public void versionOneUpgradePreservesRecordsAndAddsConnectionTables(){
+        store.close();context.deleteDatabase("paisapilot.db");
+        try(android.database.sqlite.SQLiteDatabase old=context.openOrCreateDatabase("paisapilot.db",0,null)){
+            old.execSQL("CREATE TABLE records(id TEXT PRIMARY KEY,space TEXT NOT NULL,section TEXT NOT NULL,data TEXT NOT NULL)");old.execSQL("CREATE TABLE spaces(id TEXT PRIMARY KEY,name TEXT NOT NULL,type TEXT NOT NULL)");old.execSQL("INSERT INTO spaces VALUES('personal','Personal','Personal')");
+            android.content.ContentValues v=new android.content.ContentValues();JSONObject r=tx("upgrade-record","Expense",29,true);v.put("id",r.optString("id"));v.put("space","personal");v.put("section","Transaction");v.put("data",r.toString());old.insertOrThrow("records",null,v);old.setVersion(1);
+        }
+        store=new Store(context);assertEquals(29,store.get("upgrade-record").optLong("amount"));store.connectCloud("personal","abcdefghijklmnopqrstuv123456789",true);assertNotNull(store.cloudLink("personal"));
+    }
+    @Test public void receivedSharedTransactionsAlwaysNeedLocalReview()throws Exception{
+        String shared=store.addSpace("Shared","Household"),sheet="abcdefghijklmnopqrstuv123456789";store.connectCloud(shared,sheet,false);
+        JSONObject r=tx("remote-new","Income",2900,true);SyncProtocol.Result result=new SyncProtocol.Result();result.incoming.put("remote-new",SyncProtocol.canonical(SyncProtocol.portable(r)));
+        store.applySync(shared,sheet,SyncProtocol.fingerprint(Collections.emptyMap()),result);assertFalse(store.get("remote-new").optBoolean("reviewed"));assertEquals(0,store.totals(shared,YearMonth.now())[0]);assertEquals(1,store.totals(shared,YearMonth.now())[3]);
+    }
     @Test public void realScreenCreatesTransactionAndSurvivesRecreation(){
         try(ActivityScenario<MainActivity> activity=ActivityScenario.launch(MainActivity.class)){
             onView(withText("Add transaction")).perform(scrollTo(),click());

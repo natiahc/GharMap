@@ -16,7 +16,7 @@ let recordKinds = ["Income", "Expense", "Refund", "Transfer", "Card repayment", 
 let sections = ["Transaction", "Commitment", "Goal", "Holding", "Settings"]
 let moneyKeys = ["takehome", "spending", "debt", "reserveadd", "goalsadd", "reserves", "essentials", "retained", "initial", "riskcap", "riskfunded", "riskloss", "losslimit", "paydaycash", "dailyspend"]
 let planFields: [(String, String)] = [("takehome","Take-home income"),("spending","Spending excluding debt"),("debt","Debt payments"),("reserveadd","Reserve contribution"),("goalsadd","Other goal contributions"),("reserves","Accessible reserves"),("essentials","Essential outgoings including debt"),("retained","Income retained after job loss"),("initial","Existing long-term assets"),("riskcap","Experiment funding cap"),("riskfunded","Capital already funded"),("riskloss","Cumulative experiment loss"),("losslimit","Loss pause threshold")]
-func day(_ date: Date = Date()) -> String { let f = DateFormatter(); f.locale = Locale(identifier:"en_US_POSIX"); f.timeZone = TimeZone(secondsFromGMT:0); f.dateFormat = "yyyy-MM-dd"; return f.string(from:date) }
+func day(_ date: Date = Date()) -> String { let f = DateFormatter(); f.locale = Locale(identifier:"en_US_POSIX"); f.timeZone = .current; f.dateFormat = "yyyy-MM-dd"; return f.string(from:date) }
 func dateValue(_ text: String) throws -> Date {
     let f=DateFormatter(); f.locale=Locale(identifier:"en_US_POSIX"); f.timeZone=TimeZone(secondsFromGMT:0); f.dateFormat="yyyy-MM-dd"; f.isLenient=false
     guard let date=f.date(from:text), f.string(from:date)==text else {throw PilotError(message:"Use date YYYY-MM-DD")};return date
@@ -69,7 +69,7 @@ struct PilotRecord: Identifiable {
             for key in moneyKeys where r.value[key] != nil {try integer(r,key)}
             for key in ["months","riskbp","years","returnbp","inflationbp","stepupbp"] where r.value[key] != nil {try integer(r,key,key=="returnbp")}
             try require((0...120).contains(r.num("months",6))&&(0...10000).contains(r.num("riskbp"))&&(1...60).contains(r.num("years",10))&&(-9900...5000).contains(r.num("returnbp",800))&&(0...2500).contains(r.num("inflationbp",600))&&(0...2500).contains(r.num("stepupbp")),"Invalid plan range")
-            if let value=r.value["paused"] as? NSNumber {try require(CFGetTypeID(value)==CFBooleanGetTypeID(),"Invalid pause state")}
+            if r.value["paused"] != nil {guard let value=r.value["paused"] as? NSNumber,CFGetTypeID(value)==CFBooleanGetTypeID() else {throw PilotError(message:"Invalid pause state")}}
             if r.value["payday"] != nil {_ = try dateValue(r.str("payday"))};return
         }
         try require(!r.str("title").trimmingCharacters(in:.whitespacesAndNewlines).isEmpty&&r.str("title").count<=300&&r.str("note").count<=2000,"Enter a description (up to 300 characters)")
