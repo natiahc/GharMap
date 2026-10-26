@@ -138,17 +138,24 @@ final class Store extends SQLiteOpenHelper {
         } finally { db.endTransaction(); }
     }
     void settle(JSONObject commitment, long payment, String date) {
-        long outstanding=amount(commitment,"amount");
-        if(payment<=0 || payment>outstanding) throw new IllegalArgumentException("Payment must be within the outstanding amount");
-        String type=commitment.optString("kind");
-        JSONObject tx=record(commitment.optString("space"),"Transaction");
-        set(tx,"title",commitment.optString("title"));set(tx,"date",date);set(tx,"amount",payment);
-        set(tx,"currency","INR");set(tx,"reviewed",true);set(tx,"source","manual-settlement");
-        set(tx,"kind",type.equals("Money lent")?"Lent principal returned":(type.equals("Loan taken")||type.equals("EMI principal"))?"Loan principal repayment":type.equals("Card bill")?"Card repayment": "Expense");
-        set(tx,"category","Commitments");set(tx,"account",commitment.optString("account","Unspecified"));
-        set(tx,"owner",commitment.optString("owner"));set(tx,"note","Linked to commitment "+commitment.optString("id"));
         SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
-        try { put(tx); set(commitment,"amount",outstanding-payment);set(commitment,"done",payment==outstanding);put(commitment);db.setTransactionSuccessful(); }
-        finally {db.endTransaction();}
+        try {
+            // Reload inside the write transaction: a stale dialog must not repay twice.
+            JSONObject current=get(commitment.optString("id"));
+            if(current==null || !"Commitment".equals(current.optString("section")))
+                throw new IllegalArgumentException("Commitment no longer exists");
+            long outstanding=amount(current,"amount");
+            if(payment<=0 || payment>outstanding || current.optBoolean("done"))
+                throw new IllegalArgumentException("Payment must be within the current outstanding amount");
+            String type=current.optString("kind");
+            JSONObject tx=record(current.optString("space"),"Transaction");
+            set(tx,"title",current.optString("title"));set(tx,"date",date);set(tx,"amount",payment);
+            set(tx,"currency","INR");set(tx,"reviewed",true);set(tx,"source","manual-settlement");
+            set(tx,"kind",type.equals("Money lent")?"Lent principal returned":(type.equals("Loan taken")||type.equals("EMI principal"))?"Loan principal repayment":type.equals("Card bill")?"Card repayment":"Expense");
+            set(tx,"category","Commitments");set(tx,"account",current.optString("account","Unspecified"));
+            set(tx,"owner",current.optString("owner"));set(tx,"note","Linked to commitment "+current.optString("id"));
+            put(tx);set(current,"amount",outstanding-payment);set(current,"done",payment==outstanding);put(current);
+            db.setTransactionSuccessful();
+        } finally { db.endTransaction(); }
     }
 }

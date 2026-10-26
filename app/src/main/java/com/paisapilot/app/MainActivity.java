@@ -50,7 +50,7 @@ public final class MainActivity extends Activity {
     private long money(EditText e){String v=e.getText().toString().trim();return Engine.parse(v.isEmpty()?"0":v);}
     private int integer(EditText e,int fallback){String v=e.getText().toString().trim();return v.isEmpty()?fallback:Integer.parseInt(v);}
     private void render() {
-        LinearLayout root=Ui.column(this);root.setBackgroundColor(Ui.BG);int pad=Ui.dp(this,18);root.setPadding(pad,pad,pad,pad);
+        LinearLayout root=Ui.column(this);root.setBackgroundColor(Ui.BG);root.setFitsSystemWindows(true);int pad=Ui.dp(this,18);root.setPadding(pad,pad,pad,pad);
         TextView brand=Ui.text(this,"PAISAPILOT  /  PRIVATE BY DESIGN",12,Ui.GREEN);root.addView(brand);
         List<JSONObject> spaces=store.spaces();String[] names=new String[spaces.size()];int index=0;
         for(int i=0;i<spaces.size();i++){names[i]=spaces.get(i).optString("name")+" · "+spaces.get(i).optString("type");if(spaces.get(i).optString("id").equals(space))index=i;}
@@ -204,6 +204,7 @@ public final class MainActivity extends Activity {
             note("Risk headroom is manual: update already-funded capital and losses after activity. This app cannot enforce broker limits. Goals/holdings are separate records; avoid counting the same asset twice.");
         }
         content.addView(Ui.button(this,"Edit financial plan",true,v->editPlan()));
+        content.addView(Ui.button(this,"Money until payday",false,v->payday()));
         content.addView(Ui.button(this,"Household contribution split",false,v->split()));
     }
     private void editPlan(){
@@ -225,13 +226,32 @@ public final class MainActivity extends Activity {
             long[] b=calculate(r);Engine.project(r.optLong("initial"),b[2],r.optInt("years"),r.optInt("returnbp"),r.optInt("inflationbp"),r.optInt("stepupbp"));store.put(r);
         });
     }
+    private void payday(){
+        JSONObject settings=store.settings(space);LinearLayout f=form();
+        EditText cash=Ui.input(this,f,"Available spending cash INR",Engine.format(settings.optLong("paydaycash")),true);
+        EditText daily=Ui.input(this,f,"Daily spending excluding listed bills INR",Engine.format(settings.optLong("dailyspend")),true);
+        EditText date=Ui.input(this,f,"Next payday YYYY-MM-DD",settings.optString("payday",LocalDate.now().plusDays(30).toString()),false);
+        f.addView(Ui.text(this,"Enter cash available today after past payments. Keep emergency savings separate. Due/overdue unpaid commitments are included; money lent, expected income and tasks are excluded. Avoid entering the same bill in daily spending.",14,Ui.MUTED));
+        dialog("Money until payday",f,"Calculate",()->{
+            LocalDate today=LocalDate.now(),end=LocalDate.parse(date.getText().toString().trim());
+            long days=ChronoUnit.DAYS.between(today,end);if(days<0||days>366)throw new IllegalArgumentException("Choose payday within the next 366 days");
+            long available=money(cash),dailyValue=money(daily),bills=0;
+            for(JSONObject r:store.list(space,"Commitment"))
+                if(!r.optBoolean("done") && !r.optString("kind").equals("Task") && !r.optString("kind").equals("Money lent") && !LocalDate.parse(r.optString("date")).isAfter(end))
+                    bills=Math.addExact(bills,Store.amount(r,"amount"));
+            long[] b=Engine.plan(new long[]{available,Math.multiplyExact(days,dailyValue),bills,0,0,0,0,0,0,0,0});
+            JSONObject saved=Store.copy(settings);Store.set(saved,"paydaycash",available);Store.set(saved,"dailyspend",dailyValue);Store.set(saved,"payday",end.toString());store.put(saved);
+            message(days+" days until payday\nUnpaid commitments: "+Engine.money(bills)+"\n"+(b[1]>0?"Estimated shortfall: "+Engine.money(b[1]):"Estimated remaining: "+Engine.money(b[0]))+"\nNo expected salary or receivables counted before payday. Update cash after spending; this is a scenario, not a live bank balance.");
+        });
+    }
     private void split(){
         LinearLayout f=form();EditText total=Ui.input(this,f,"Shared monthly costs INR","",true);
         EditText a=Ui.input(this,f,"Person A income or weight","",true),b=Ui.input(this,f,"Person B income or weight","",true);
         Spinner method=Ui.choices(this,f,"Method",new String[]{"Equal","Income based / custom weights"},"Equal");
         dialog("Contribution calculator",f,"Calculate",()->{long costs=money(total),wa=selected(method).equals("Equal")?1:money(a),wb=selected(method).equals("Equal")?1:money(b);
             java.math.BigInteger sum=java.math.BigInteger.valueOf(wa).add(java.math.BigInteger.valueOf(wb));if(sum.signum()==0)throw new IllegalArgumentException("Enter at least one positive weight");
-            long first=java.math.BigInteger.valueOf(costs).multiply(java.math.BigInteger.valueOf(wa)).divide(sum).longValueExact();message("Person A: "+Engine.money(first)+"\nPerson B: "+Engine.money(costs-first)+"\nThis calculation does not move money or share records.");});
+            // The quotient is within [0,costs], already bounded to MAX, so longValue is exact.
+            long first=java.math.BigInteger.valueOf(costs).multiply(java.math.BigInteger.valueOf(wa)).divide(sum).longValue();message("Person A: "+Engine.money(first)+"\nPerson B: "+Engine.money(costs-first)+"\nThis calculation does not move money or share records.");});
     }
     private void newSpace(){LinearLayout f=form();EditText name=Ui.input(this,f,"Space name","",false);Spinner type=Ui.choices(this,f,"Space type",new String[]{"Household","Business"},"Household");
         f.addView(Ui.text(this,"Spaces are separate local ledgers. A household space does not connect another device or grant access. Export only records you explicitly choose to share.",14,Ui.MUTED));

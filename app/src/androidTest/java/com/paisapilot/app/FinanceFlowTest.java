@@ -76,7 +76,10 @@ public class FinanceFlowTest {
             store.settle(c,4000,LocalDate.now().toString());assertEquals(6000,store.get(c.optString("id")).optLong("amount"));
             store.settle(c,6000,LocalDate.now().toString());assertTrue(store.get(c.optString("id")).optBoolean("done"));
         }
-        assertEquals(8,store.list("personal","Transaction").size());assertEquals(0,store.totals("personal",YearMonth.now())[1]);
+        JSONObject stale=Store.record("personal","Commitment");Store.set(stale,"title","Stale dialog");Store.set(stale,"kind","Card bill");Store.set(stale,"date",LocalDate.now().toString());Store.set(stale,"amount",100);store.put(stale);
+        store.settle(stale,100,LocalDate.now().toString());
+        try{store.settle(stale,100,LocalDate.now().toString());fail("Settled a stale dialog twice");}catch(IllegalArgumentException expected){}
+        assertEquals(9,store.list("personal","Transaction").size());assertEquals(0,store.totals("personal",YearMonth.now())[1]);
     }
     @Test public void realScreenCreatesTransactionAndSurvivesRecreation(){
         try(ActivityScenario<MainActivity> activity=ActivityScenario.launch(MainActivity.class)){

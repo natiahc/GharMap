@@ -29,6 +29,8 @@ budget allocation and growth projections. No backend, analytics or cloud AI.
   principal/expense transaction atomically. Interest must be entered separately.
 - Monthly long-term/risk contribution scenarios, essential-expense reserves,
   emergency gap, no-income/one-income runway, risk funding cap and loss pause.
+- Money-until-payday scenarios from available cash, daily spending and unpaid
+  commitments, excluding expected income and money lent.
 - Retirement growth scenarios with visible annual return, inflation, contribution
   step-up and horizon assumptions. Rates are user-editable, not predictions.
 
