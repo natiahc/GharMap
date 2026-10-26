@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 extension Color { static let pilot=Color(red:25/255,green:122/255,blue:103/255) }
 @main struct PaisaPilotApp: App {
     @StateObject private var store=FinanceStore()
-    var body: some Scene {WindowGroup{PilotRoot().environmentObject(store).tint(.pilot)}}
+    var body: some Scene {WindowGroup{PilotRoot().environmentObject(store).tint(Color.pilot)}}
 }
 struct PilotRoot: View {
     @EnvironmentObject var store:FinanceStore
@@ -31,7 +31,7 @@ struct Dashboard:View {
     @State private var editor:PilotRecord?
     @State private var month=String(day().prefix(7))
     var body:some View{NavigationStack{Form{
-        Section{SpacePicker(space:$space);Text("Your money. Your plan. Your breathing room.").font(.title2).foregroundStyle(.pilot)}
+        Section{SpacePicker(space:$space);Text("Your money. Your plan. Your breathing room.").font(.title2).foregroundStyle(Color.pilot)}
         Section("Recorded totals"){
             TextField("Month YYYY-MM",text:$month)
             if let t=try? store.totals(space,month){MoneyRow(label:"Reviewed income",value:(t["income"] as? NSNumber)?.int64Value ?? 0)
@@ -50,7 +50,7 @@ struct LedgerScreen:View {
     var body:some View{NavigationStack{List{
         Section{SpacePicker(space:$space);Toggle("Needs review only",isOn:$pendingOnly);Button("Add transaction"){editor = .new(space,"Transaction")}}
         ForEach(store.rows(space,"Transaction").filter{!pendingOnly || !$0.flag("reviewed")}){r in
-            Button{editor=r}label:{VStack(alignment:.leading){Text(r.str("title")).font(.headline);Text("\(rupees(r.num("amount"))) · \(r.str("kind"))").foregroundStyle(.pilot)
+            Button{editor=r}label:{VStack(alignment:.leading){Text(r.str("title")).font(.headline);Text("\(rupees(r.num("amount"))) · \(r.str("kind"))").foregroundStyle(Color.pilot)
                 Text("\(r.str("date")) · \(r.flag("reviewed") ? "Reviewed" : "Needs review")").font(.caption).foregroundStyle(.secondary)}}
             .swipeActions{Button("Delete",role:.destructive){do{try store.remove(r.id)}catch{store.error=error.localizedDescription}}}
         }
@@ -153,8 +153,16 @@ struct BinaryFile:FileDocument {
 struct DataScreen:View {
     @EnvironmentObject var store:FinanceStore
     @Binding var space:String
-    @State private var password="",confirmation="",consent=false,busy=false,exporting=false,importing=false
-    @State private var file=BinaryFile(),newName="",newType="Household",notice:String?
+    @State private var password=""
+    @State private var confirmation=""
+    @State private var consent=false
+    @State private var busy=false
+    @State private var exporting=false
+    @State private var importing=false
+    @State private var file=BinaryFile()
+    @State private var newName=""
+    @State private var newType="Household"
+    @State private var notice:String?
     var body:some View{NavigationStack{Form{
         Section{SpacePicker(space:$space);Text("Local protected storage. Backups contain ALL spaces; keep them and their passphrase private. No Google credentials are included.").font(.footnote)}
         Section("Encrypted full backup / restore"){

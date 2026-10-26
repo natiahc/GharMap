@@ -33,6 +33,15 @@ public final class MainActivity extends Activity {
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
     private static final int EXPORT=10,IMPORT=11,SMS=12,BACKUP=13,RESTORE=14;
     private char[] backupPassword;
+    private static final int GOOGLE=15;
+    private interface CloudAction{void run(SheetsClient client)throws Exception;}
+    private CloudAction cloudAction;
+    private boolean cloudBusy=false,resumed=false;
+    private final android.os.Handler timer=new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable autoSync=()->autoSyncTick();
+    private String cloudTarget;
+    private String lastAutoFingerprint="";
+
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);store=new Store(this);
         if(state!=null) {space=state.getString("space","personal");page=state.getString("page","Overview");month=YearMonth.parse(state.getString("month",YearMonth.now().toString()));}
@@ -44,7 +53,9 @@ public final class MainActivity extends Activity {
         super.onSaveInstanceState(state);state.putString("space",space);state.putString("page",page);state.putString("month",month.toString());
         // Pending SAF actions intentionally abort on recreation rather than export another space.
     }
-    @Override protected void onDestroy(){super.onDestroy();clearBackupPassword();worker.execute(store::close);worker.shutdown();}
+    @Override protected void onResume(){super.onResume();resumed=true;timer.postDelayed(autoSync,60000);}
+    @Override protected void onPause(){super.onPause();resumed=false;timer.removeCallbacks(autoSync);}
+    @Override protected void onDestroy(){super.onDestroy();timer.removeCallbacks(autoSync);cloudAction=null;clearBackupPassword();worker.execute(store::close);worker.shutdown();}
     private void message(String text){new AlertDialog.Builder(this).setTitle("PaisaPilot").setMessage(text).setPositiveButton("OK",null).show();}
     private void error(Exception e){message(e.getMessage()==null?"Could not complete this action":e.getMessage());}
     private String selected(Spinner s){return String.valueOf(s.getSelectedItem());}
@@ -69,6 +80,7 @@ public final class MainActivity extends Activity {
         try {switch(page){case "Overview":overview();break;case "Transactions":transactions();break;case "Plan":plan();break;
             case "Goals":records("Goal");break;case "Commitments":records("Commitment");break;case "Holdings":records("Holding");break;default:data();}}
         catch(Exception e){content.addView(Ui.text(this,"Data needs attention: "+e.getMessage(),16,Ui.RED));}
+        if(resumed&&!cloudBusy){String current=SyncProtocol.fingerprint(SyncProtocol.local(store.scopeRows(space)));if(!current.equals(lastAutoFingerprint)){timer.removeCallbacks(autoSync);timer.postDelayed(autoSync,5000);}}
     }
     private void note(String value){content.addView(Ui.text(this,value,14,Ui.MUTED));}
     private void card(String heading,String value,String detail){LinearLayout box=Ui.card(this);box.addView(Ui.text(this,heading,14,Ui.MUTED));box.addView(Ui.text(this,value,27,Ui.INK));box.addView(Ui.text(this,detail,13,Ui.MUTED));content.addView(box);}
@@ -264,13 +276,76 @@ public final class MainActivity extends Activity {
         content.addView(Ui.button(this,"Import PaisaPilot CSV",false,v->{importSpace=space;Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,IMPORT);}));
         content.addView(Ui.button(this,"Export this space's transactions CSV",false,v->export()));
         content.addView(Ui.button(this,"Create household or business space",false,v->newSpace()));
+        content.addView(Ui.button(this,"Google Sheets & partner connection",false,v->cloudScreen()));
         content.addView(Ui.button(this,"Encrypted full backup",false,v->backupDialog(false)));
         content.addView(Ui.button(this,"Restore full backup",false,v->backupDialog(true)));
-        note("CSV opens in Google Sheets/Excel and contains transactions only; goals, plans, commitments and holdings are not included. Use encrypted full backup for all records. Automatic Google sync, live partner sharing and standard bank-statement adapters are not connected.");
+        note("CSV opens in Google Sheets/Excel and contains transactions only; goals, plans, commitments and holdings are not included. Use encrypted full backup for all records. Optional Google Sheets sync and partner access need Google OAuth/API setup. Standard bank-statement adapters are not connected.");
         note("SMS import is optional, on demand and limited to supported unambiguous formats. Permission may be restricted by Android or store policy. Paste/manual entry works without SMS access. No background chat access.");
         note("Imported records start unreviewed. Match them to statements, remove duplicates from different sources, and correct transfers, loans and card repayments before approving. No claim of complete capture or automatic reconciliation.");
-        content.addView(Ui.button(this,"App capabilities",false,v->message("PaisaPilot 0.2 pilot\nOffline INR tracking, review, CSV, planning, separate spaces, goals, holdings and commitments.\nNo live market prices, payment execution, investment orders, tax filing or return guarantees.\nHousehold/business support is local organisation, not remote access control or full accounting.")));
+        content.addView(Ui.button(this,"App capabilities",false,v->message("PaisaPilot 0.3 pilot\nOffline INR tracking, review, CSV, planning, separate spaces, goals, holdings and commitments.\nNo live market prices, payment execution, investment orders, tax filing or return guarantees.\nOptional Google Sheets collaboration is Google-account controlled and needs OAuth/API setup. Business spaces are not full accounting.")));
     }
+    private void cloudScreen(){
+        JSONObject link=store.cloudLink(space);LinearLayout f=form();final String target=space;
+        f.addView(Ui.text(this,"Optional Google-hosted sync. Only this selected space is sent, including its existing history, goals, holdings, notes and plan. Other spaces remain private. Received transactions require local review. Google authorization includes spreadsheet-wide scope; this app targets only the connected file.",14,Ui.MUTED));
+        if(link==null){EditText sheet=Ui.input(this,f,"Existing PaisaPilot spreadsheet link (blank creates one)","",false);
+            CheckBox consent=new CheckBox(this);consent.setText("I approve syncing ALL current and future records in this selected space to Google and its collaborators.");f.addView(consent);
+            dialog("Connect selected space",f,"Authorize & connect",()->{if(!consent.isChecked())throw new IllegalArgumentException("Approve the sync scope first");String value=sheet.getText().toString().trim();if(!value.isEmpty())SheetsClient.sheetId(value);
+                authorize(client->{String id=value.isEmpty()?client.create("PaisaPilot shared space"):SheetsClient.sheetId(value);client.events(id);store.connectCloud(target,id,value.isEmpty());runOnUiThread(()->{if(!isDestroyed()){render();message("Spreadsheet connected. Use Sync now to exchange records. OAuth/API configuration must match this app's signing certificate.");}});},true,target);
+            });return;
+        }
+        f.addView(Ui.text(this,"Sheet: "+link.optString("sheet")+"\nLast successful sync: "+(link.optLong("last")==0?"Never":new java.util.Date(link.optLong("last")))+"\n"+link.optString("error"),13,Ui.MUTED));
+        f.addView(Ui.button(this,"Sync now",true,v->sync(target,true,new HashMap<>())));
+        CheckBox auto=new CheckBox(this);auto.setText("Automatic sync while this app is open (about every minute)");auto.setChecked(link.optBoolean("auto"));f.addView(auto);
+        auto.setOnCheckedChangeListener((b,checked)->{store.cloudStatus(target,"",checked);if(checked)timer.postDelayed(autoSync,1000);});
+        f.addView(Ui.button(this,"Open spreadsheet",false,v->startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://docs.google.com/spreadsheets/d/"+link.optString("sheet"))))));
+        if(link.optBoolean("owner")){
+            EditText email=Ui.input(this,f,"Partner Google account email","",false);CheckBox approval=new CheckBox(this);approval.setText("Grant this account writer access to ALL data in this shared space. No email notification will be sent.");f.addView(approval);
+            f.addView(Ui.button(this,"Grant partner access",false,v->{if(!approval.isChecked()){message("Approve partner access first");return;}String address=email.getText().toString().trim();authorize(client->{client.invite(link.optString("sheet"),address);runOnUiThread(()->{if(!isDestroyed())message("Access granted. Share the spreadsheet link with your partner separately. They must authorize Google and explicitly connect their chosen local space.");});},true,target);}));
+            f.addView(Ui.button(this,"Review / revoke collaborator access",false,v->authorize(client->{org.json.JSONArray permissions=client.permissions(link.optString("sheet"));runOnUiThread(()->{if(!isDestroyed())permissionChoices(target,link.optString("sheet"),permissions);});},true,target)));
+        }
+        f.addView(Ui.button(this,"Disconnect this device's space",false,v->{store.disconnectCloud(target);timer.removeCallbacks(autoSync);render();message("Disconnected locally. Other Google collaborators and their copies keep access until the spreadsheet owner revokes it.");}));
+        f.addView(Ui.text(this,"Requires Google Play services, a registered Android OAuth client, enabled Sheets/Drive APIs and approved consent configuration. Sheet access is Google-account controlled. Automatic sync stops when this app closes or an error needs review. Sync journal rows are append-only: make reports in separate tabs; direct journal edits stop sync rather than being overwritten.",13,Ui.MUTED));
+        new AlertDialog.Builder(this).setTitle("Google Sheets connection").setView(Ui.scroll(this,f)).setPositiveButton("Close",null).show();
+    }
+    private void permissionChoices(String target,String sheet,org.json.JSONArray permissions){
+        List<JSONObject> users=new ArrayList<>();if(permissions!=null)for(int i=0;i<permissions.length();i++){JSONObject p=permissions.optJSONObject(i);if(p!=null&&!p.optString("role").equals("owner"))users.add(p);}
+        if(users.isEmpty()){message("No non-owner collaborators found");return;}String[] labels=new String[users.size()];for(int i=0;i<labels.length;i++)labels[i]=users.get(i).optString("emailAddress",users.get(i).optString("type"))+" · "+users.get(i).optString("role");
+        new AlertDialog.Builder(this).setTitle("Choose access to revoke").setItems(labels,(d,index)->new AlertDialog.Builder(this).setTitle("Revoke "+labels[index]+"?").setMessage("Stops future access through this permission. Previously downloaded copies remain with the recipient.").setNegativeButton("Cancel",null).setPositiveButton("Revoke",(q,w)->authorize(client->{client.revoke(sheet,users.get(index).optString("id"));runOnUiThread(()->{if(!isDestroyed())message("Google permission revoked");});},true,target)).show()).show();
+    }
+    private void sync(String target,boolean manual,Map<String,String> choices){
+        if(cloudBusy){if(manual)message("A Google operation is already running");return;}
+        store.cloudStatus(target,"",null);
+        String device=getPreferences(0).getString("syncDevice",null);if(device==null){device=UUID.randomUUID().toString();getPreferences(0).edit().putString("syncDevice",device).apply();}final String deviceId=device;
+        authorize(client->{try{client.sync(store,target,deviceId,choices);runOnUiThread(()->{if(!isDestroyed()){lastAutoFingerprint=SyncProtocol.fingerprint(SyncProtocol.local(store.scopeRows(space)));render();if(manual)message("Sync complete. Review newly received transactions before counting them.");}});}
+            catch(SyncProtocol.Conflict conflict){store.cloudStatus(target,"Concurrent edits need review",null);runOnUiThread(()->{if(!isDestroyed()&&manual)resolveConflict(target,conflict,choices);});}
+        },manual,target);
+    }
+    private void resolveConflict(String target,SyncProtocol.Conflict conflict,Map<String,String> choices){
+        LinearLayout f=form();f.addView(Ui.text(this,"Concurrent versions of "+conflict.record+". Choose which record should become the shared version. No version is silently discarded.",14,Ui.MUTED));
+        RadioGroup radio=new RadioGroup(this);List<String> ids=new ArrayList<>();ids.add("LOCAL");List<String> payloads=new ArrayList<>();payloads.add(conflict.local);
+        for(SyncProtocol.Event e:conflict.remote){ids.add(e.id);payloads.add(e.payload);}
+        List<Integer> viewIds=new ArrayList<>();for(int i=0;i<ids.size();i++){RadioButton b=new RadioButton(this);int viewId=View.generateViewId();viewIds.add(viewId);b.setId(viewId);b.setText((i==0?"This device":"Cloud revision "+ids.get(i))+"\n"+payloads.get(i));radio.addView(b);}f.addView(radio);
+        dialog("Review sync conflict",f,"Use selected version",()->{int index=viewIds.indexOf(radio.getCheckedRadioButtonId());if(index<0||index>=ids.size())throw new IllegalArgumentException("Choose a version after reviewing it");Map<String,String> next=new HashMap<>(choices);next.put(conflict.record,ids.get(index));sync(target,true,next);});
+    }
+    private void autoSyncTick(){
+        if(!resumed||isDestroyed())return;
+        if(!cloudBusy){JSONObject link=store.cloudLink(space);if(link!=null&&link.optBoolean("auto")&&link.optString("error").isEmpty())sync(space,false,new HashMap<>());}
+        timer.removeCallbacks(autoSync);timer.postDelayed(autoSync,60000);
+    }
+    private void authorize(CloudAction action,boolean interactive,String target){
+        if(cloudBusy){if(interactive)message("A Google operation is already running");return;}cloudBusy=true;cloudAction=action;cloudTarget=target;
+        com.google.android.gms.auth.api.identity.AuthorizationRequest request=com.google.android.gms.auth.api.identity.AuthorizationRequest.builder().setRequestedScopes(Arrays.asList(new com.google.android.gms.common.api.Scope("https://www.googleapis.com/auth/spreadsheets"),new com.google.android.gms.common.api.Scope("https://www.googleapis.com/auth/drive.file"))).build();
+        com.google.android.gms.auth.api.identity.Identity.getAuthorizationClient(this).authorize(request).addOnSuccessListener(result->{
+            if(isDestroyed()){cloudBusy=false;cloudAction=null;return;}
+            if(result.hasResolution()){if(!interactive){cloudFailure(new IllegalArgumentException("Open Google connection and Sync now to authorize access"),false);return;}
+                try{startIntentSenderForResult(result.getPendingIntent().getIntentSender(),GOOGLE,null,0,0,0);}catch(Exception e){cloudFailure(e,true);}}
+            else runCloud(result.getAccessToken(),interactive);
+        }).addOnFailureListener(e->cloudFailure(e,interactive));
+    }
+    private void runCloud(String token,boolean interactive){CloudAction action=cloudAction;cloudAction=null;if(action==null){cloudBusy=false;message("Google action cancelled after app recreation. Start again.");return;}
+        worker.execute(()->{try{action.run(new SheetsClient(token));}catch(Exception e){runOnUiThread(()->cloudFailure(e,interactive));}finally{runOnUiThread(()->cloudBusy=false);}});
+    }
+    private void cloudFailure(Exception e,boolean interactive){cloudBusy=false;cloudAction=null;if(isDestroyed())return;if(cloudTarget!=null)store.cloudStatus(cloudTarget,"Google connection needs review: "+e.getClass().getSimpleName(),null);if(interactive&&!isDestroyed())message("Google connection failed: "+e.getMessage()+"\nVerify the Cloud project's Android package/signing SHA-1, consent test users, and enabled Sheets/Drive APIs. Offline finance and backups still work.");}
     private void clearBackupPassword(){if(backupPassword!=null){Arrays.fill(backupPassword,'\0');backupPassword=null;}}
     private void backupDialog(boolean restore){
         LinearLayout f=form();EditText pass=Ui.input(this,f,"Backup passphrase (12–128 English characters)","",false);pass.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
@@ -318,6 +393,10 @@ public final class MainActivity extends Activity {
             pendingCsv=Imports.csv(store.list(space,"Transaction"));Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("text/csv");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"PaisaPilot-"+LocalDate.now()+".csv");startActivityForResult(i,EXPORT);d.dismiss();}));d.show();
     }
     @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);
+        if(request==GOOGLE){
+            if(result!=RESULT_OK||data==null){cloudFailure(new IllegalArgumentException("Google authorization cancelled"),true);return;}
+            try{runCloud(com.google.android.gms.auth.api.identity.Identity.getAuthorizationClient(this).getAuthorizationResultFromIntent(data).getAccessToken(),true);}catch(Exception e){cloudFailure(e,true);}return;
+        }
         if(result!=RESULT_OK||data==null||data.getData()==null){pendingCsv=null;importSpace=null;clearBackupPassword();return;}
         Uri uri=data.getData();
         if(request==BACKUP||request==RESTORE){

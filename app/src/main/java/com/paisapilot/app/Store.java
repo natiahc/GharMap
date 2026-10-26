@@ -12,6 +12,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /** One local record store and one persistence path for all spaces and features. */
@@ -21,15 +22,20 @@ final class Store extends SQLiteOpenHelper {
         "Money lent", "Lent principal returned"};
     static final String[] SECTIONS = {"Transaction", "Commitment", "Goal", "Holding", "Settings"};
     static final long MAX = 1_000_000_000_000_000L;
-    Store(Context context) { super(context, "paisapilot.db", null, 1); }
+    Store(Context context) { super(context, "paisapilot.db", null, 2); }
     @Override public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE records(id TEXT PRIMARY KEY, space TEXT NOT NULL, section TEXT NOT NULL, data TEXT NOT NULL)");
         db.execSQL("CREATE INDEX record_scope ON records(space,section)");
         db.execSQL("CREATE TABLE spaces(id TEXT PRIMARY KEY,name TEXT NOT NULL,type TEXT NOT NULL)");
         db.execSQL("INSERT INTO spaces VALUES('personal','Personal','Personal')");
+        createCloudTables(db);
     }
-    @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        throw new IllegalStateException("Unsupported database migration");
+    private void createCloudTables(SQLiteDatabase db){
+        db.execSQL("CREATE TABLE IF NOT EXISTS cloud_links(space TEXT PRIMARY KEY,sheet TEXT NOT NULL,owner INTEGER NOT NULL,auto INTEGER NOT NULL DEFAULT 0,last_sync INTEGER NOT NULL DEFAULT 0,error TEXT NOT NULL DEFAULT '')");
+        db.execSQL("CREATE TABLE IF NOT EXISTS sync_bases(space TEXT NOT NULL,record_id TEXT NOT NULL,heads TEXT NOT NULL,hash TEXT NOT NULL,PRIMARY KEY(space,record_id))");
+    }
+    @Override public void onUpgrade(SQLiteDatabase db,int oldVersion,int newVersion){
+        if(oldVersion==1&&newVersion==2)createCloudTables(db);else throw new IllegalStateException("Unsupported database migration");
     }
     static JSONObject copy(JSONObject value) {
         try { return new JSONObject(value.toString()); }
@@ -169,7 +175,7 @@ final class Store extends SQLiteOpenHelper {
             throw new IllegalArgumentException("Invalid backup record counts");
         SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
         try {
-            db.delete("records",null,null);db.delete("spaces",null,null);
+            db.delete("records",null,null);db.delete("spaces",null,null);db.delete("cloud_links",null,null);db.delete("sync_bases",null,null);
             boolean personal=false;java.util.HashSet<String> scopeIds=new java.util.HashSet<>(),ids=new java.util.HashSet<>();
             for(int i=0;i<scopes.length();i++){
                 JSONObject scope=scopes.optJSONObject(i);if(scope==null)throw new IllegalArgumentException("Invalid space");
@@ -183,6 +189,28 @@ final class Store extends SQLiteOpenHelper {
                 JSONObject row=rows.optJSONObject(i);if(row==null||!ids.add(row.optString("id")))throw new IllegalArgumentException("Invalid or repeated record");put(row);
             }
             db.setTransactionSuccessful();
+        }finally{db.endTransaction();}
+    }
+    List<JSONObject> scopeRows(String space){List<JSONObject> out=new ArrayList<>();for(String section:SECTIONS)out.addAll(list(space,section));return out;}
+    JSONObject cloudLink(String space){try(Cursor c=getReadableDatabase().rawQuery("SELECT sheet,owner,auto,last_sync,error FROM cloud_links WHERE space=?",new String[]{space})){
+        if(!c.moveToFirst())return null;JSONObject r=object();set(r,"sheet",c.getString(0));set(r,"owner",c.getInt(1)==1);set(r,"auto",c.getInt(2)==1);set(r,"last",c.getLong(3));set(r,"error",c.getString(4));return r;}}
+    void connectCloud(String space,String sheet,boolean owner){boolean exists=false;for(JSONObject s:spaces())if(space.equals(s.optString("id")))exists=true;if(!exists)throw new IllegalArgumentException("Space no longer exists");if(cloudLink(space)!=null)throw new IllegalArgumentException("Disconnect this space before connecting another sheet");ContentValues v=new ContentValues();v.put("space",space);v.put("sheet",SheetsClient.sheetId(sheet));v.put("owner",owner?1:0);getWritableDatabase().insertOrThrow("cloud_links",null,v);}
+    void disconnectCloud(String space){SQLiteDatabase db=getWritableDatabase();db.beginTransaction();try{db.delete("cloud_links","space=?",new String[]{space});db.delete("sync_bases","space=?",new String[]{space});db.setTransactionSuccessful();}finally{db.endTransaction();}}
+    void cloudStatus(String space,String error,Boolean auto){ContentValues v=new ContentValues();v.put("error",error);if(auto!=null)v.put("auto",auto?1:0);getWritableDatabase().update("cloud_links",v,"space=?",new String[]{space});}
+    Map<String,JSONObject> syncBases(String space){Map<String,JSONObject> out=new java.util.TreeMap<>();try(Cursor c=getReadableDatabase().rawQuery("SELECT record_id,heads,hash FROM sync_bases WHERE space=?",new String[]{space})){while(c.moveToNext()){JSONObject r=object();set(r,"heads",c.getString(1));set(r,"hash",c.getString(2));out.put(c.getString(0),r);}}return out;}
+    void applySync(String space,String sheet,String expected,SyncProtocol.Result result)throws Exception{
+        SQLiteDatabase db=getWritableDatabase();db.beginTransaction();try{
+            JSONObject link=cloudLink(space);if(link==null||!sheet.equals(link.optString("sheet"))||!expected.equals(SyncProtocol.fingerprint(SyncProtocol.local(scopeRows(space)))))throw new IllegalArgumentException("Local data changed during sync. Retry to merge the changes.");
+            for(Map.Entry<String,String> entry:result.incoming.entrySet()){
+                String logical=entry.getKey(),id=logical.equals("settings")?"settings-"+space:logical;JSONObject old=get(id);
+                if(old!=null&&!space.equals(old.optString("space")))throw new IllegalArgumentException("Record ID belongs to another private space; nothing imported");
+                if(entry.getValue().equals("null")){delete(id);continue;}
+                JSONObject row=new JSONObject(entry.getValue());if(logical.equals("settings")&&!row.optString("section").equals("Settings"))throw new IllegalArgumentException("Reserved remote plan ID");if(!logical.equals(row.optString("id")))throw new IllegalArgumentException("Invalid remote record identity");
+                set(row,"id",id);set(row,"space",space);if(row.optString("section").equals("Settings")&&!logical.equals("settings"))throw new IllegalArgumentException("Invalid remote plan identity");
+                if(row.optString("section").equals("Transaction")){set(row,"reviewed",false);set(row,"source","google-sheet");}put(row);
+            }
+            db.delete("sync_bases","space=?",new String[]{space});for(Map.Entry<String,JSONObject> entry:result.bases.entrySet()){ContentValues v=new ContentValues();v.put("space",space);v.put("record_id",entry.getKey());v.put("heads",entry.getValue().optString("heads"));v.put("hash",entry.getValue().optString("hash"));db.insertOrThrow("sync_bases",null,v);}
+            ContentValues status=new ContentValues();status.put("last_sync",System.currentTimeMillis());status.put("error","");db.update("cloud_links",status,"space=?",new String[]{space});db.setTransactionSuccessful();
         }finally{db.endTransaction();}
     }
     void settle(JSONObject commitment, long payment, String date) {
