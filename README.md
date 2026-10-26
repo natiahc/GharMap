@@ -4,7 +4,7 @@
 
 An Android-first, offline INR finance pilot. Native Java screens and SQLite
 storage share one C++17 engine for exact money conversion, accounting totals,
-budget allocation and growth projections. No backend, analytics or cloud AI.
+budget allocation and growth projections. No app-operated backend, analytics or cloud AI. Google sync is optional.
 
 ## Working in the Android pilot
 
@@ -44,10 +44,13 @@ broker's loss limits. Plan amounts and risk headroom are entered manually; keep
 funding/losses current. Holdings/goals do not automatically become transactions.
 Recorded income/spending is not a reconciled account balance.
 
-**Not implemented:** Google authorization and automatic Sheets sync, cross-device
-partner invitations/access/revocation, statement adapters for arbitrary banks,
-receipts/OCR, recurring notifications and tax filing. The `core/` and old geometry
-documents are legacy GharMap code; neither finance app depends on them.
+**Integration status:** Android includes Google authorization, create/join sheet,
+append-only record sync, explicit conflict review, foreground automatic sync,
+and Google-account partner writer access/revocation. Live Google testing requires
+a configured Cloud project; see setup below. The iPhone finance app uses local
+records and interoperable backups; Google sync is not implemented on iPhone.
+Arbitrary bank statement adapters, receipts/OCR, recurring notifications and tax
+filing remain unimplemented. Legacy geometry code under `core/` is unused.
 
 Chats require explicit paste/share; there is no background conversation access.
 SMS access is optional and may be denied or restricted. Store publication and
@@ -56,8 +59,8 @@ Android 8+ is required; compatibility with every device is not established.
 
 ## Privacy and data ownership
 
-Records live in app-private SQLite storage; Android backup is disabled. No
-Internet or camera permission is requested. SMS permission is requested only
+Records live in app-private SQLite storage; Android backup is disabled. Internet permission supports optional Google-authorized sync; no camera
+permission is requested. SMS permission is requested only
 when the user chooses inbox import. Device security remains important; there
 is no separate app database encryption or app lock yet.
 
@@ -123,3 +126,48 @@ Generate with XcodeGen using `ios/project.yml`; scheme `PaisaPilot`, iOS 16+.
 CI builds and runs accounting, persistence and backup tests on an iPhone simulator.
 Installing on a real iPhone/TestFlight requires Apple signing and provisioning;
 the simulator `.app` artifact is not a sideloadable iPhone `.ipa`.
+
+## Google Sheets and partner setup (Android)
+
+The app uses Google Identity Services `AuthorizationClient`, not pasted tokens
+or a server-held refresh token. Register an **Android OAuth client** in your
+Google Cloud project for `com.paisapilot.app` and the SHA-1 in the CI artifact's
+`signing-certificate.txt`. Enable Google Sheets API and Google Drive API. Configure
+the OAuth consent screen, privacy information and test users; publication or
+verification is a separate step. No OAuth client secret belongs in this repo.
+A new debug signing key may need re-registration on another build; use your own
+stable signing configuration for ongoing distribution.
+
+Scopes: `spreadsheets` (access needed to join a partner's existing spreadsheet)
+and `drive.file` (create/manage permissions on app-created files). The Sheets
+scope is broader than one file; explain it in consent. The app only targets the
+explicitly connected sheet. Tokens are requested on demand and held in memory,
+never saved in records, backups or logs. Offline use needs no Google account.
+
+Create a separate household space; copy only approved records into it. Connect
+it after approving the scope, then grant the partner's exact Google email writer
+access. No notification email is sent. The partner authorizes Google separately
+and explicitly joins the spreadsheet link from their chosen local space. Google
+permissions enforce access; the app's local owner label is not a security boundary.
+Revoke collaborators in the owner UI or Google Drive. Disconnecting a device only
+removes its local connection and does not revoke other collaborators/copies.
+
+Foreground auto-sync checks roughly once a minute while the app is open, and
+after edits. It pauses on errors/consent/conflicts. There is no closed-app
+background sync or iPhone Google sync yet. Last success/errors are shown.
+Restoring a backup clears connection state and requires explicit reconnection.
+
+`PaisaPilotEvents` is an append-only change journal, including a human-readable
+description/type/amount. Do not edit/delete/reorder journal rows; create report
+formulas/custom views in separate tabs. Direct arbitrary spreadsheet edits are
+not a supported transaction-editing interface. The app does not silently replace
+external rows. Revisions keep IDs and parents; independent records merge,
+conflicting edits require a version choice, and missing/edited synced history
+stops sync. Local edits during network requests abort the local apply and are
+retried by the next merge. Received transactions need local review; review state
+is not shared. The sync journal is not end-to-end encrypted: Google and authorized
+collaborators can read that selected space. Full file backups are encrypted.
+
+Live OAuth, permissions and multi-device API testing remain required after the
+Cloud project is configured. Automated tests exercise protocol merges, conflicts,
+deletions, private-space collision protection and restore disconnect behavior.

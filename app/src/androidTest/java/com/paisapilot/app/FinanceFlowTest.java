@@ -95,6 +95,28 @@ public class FinanceFlowTest {
         byte[] fixture;try(java.io.InputStream in=InstrumentationRegistry.getInstrumentation().getContext().getAssets().open("backup-v1.b64")){java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream();byte[] b=new byte[1024];int n;while((n=in.read(b))!=-1)out.write(b,0,n);fixture=android.util.Base64.decode(out.toByteArray(),android.util.Base64.DEFAULT);}
         store.restore(Backup.decrypt(fixture,pass));assertEquals(29,store.get("fixture-29").optLong("amount"));assertNull(store.get("retained"));
     }
+    @Test public void syncMergesIndependentChangesAndRequiresConflictChoice(){
+        JSONObject one=tx("one","Expense",29,true);String p1=SyncProtocol.canonical(SyncProtocol.portable(one));
+        SyncProtocol.Event first=new SyncProtocol.Event("e1","one","",p1,"deviceA","2026-10-26T00:00:00Z");
+        SyncProtocol.Result initial=SyncProtocol.merge(Collections.singletonList(first),Collections.emptyMap(),Collections.emptyMap(),Collections.emptyMap(),"B");
+        assertEquals(p1,initial.incoming.get("one"));assertTrue(initial.outgoing.isEmpty());
+        Map<String,String> local=new TreeMap<>();local.put("one",p1);local.put("two",SyncProtocol.canonical(SyncProtocol.portable(tx("two","Income",100,true))));
+        SyncProtocol.Result next=SyncProtocol.merge(Collections.singletonList(first),local,initial.bases,Collections.emptyMap(),"B");assertEquals(1,next.outgoing.size());assertEquals("two",next.outgoing.get(0).record);
+        JSONObject changed=Store.copy(one);Store.set(changed,"amount",30);String p2=SyncProtocol.canonical(SyncProtocol.portable(changed));SyncProtocol.Event branch=new SyncProtocol.Event("e2","one","",p2,"C","2026-10-26T00:00:01Z");
+        try{SyncProtocol.merge(Arrays.asList(first,branch),Collections.singletonMap("one",p1),initial.bases,Collections.emptyMap(),"B");fail("Silently selected a branch");}catch(SyncProtocol.Conflict expected){}
+        SyncProtocol.Result resolved=SyncProtocol.merge(Arrays.asList(first,branch),Collections.singletonMap("one",p1),initial.bases,Collections.singletonMap("one","e2"),"B");assertEquals(p2,resolved.incoming.get("one"));assertEquals("e1,e2",resolved.outgoing.get(0).parents);
+        JSONObject altered=Store.copy(one);Store.set(altered,"amount",999);SyncProtocol.Event edited=new SyncProtocol.Event("e1","one","",SyncProtocol.canonical(SyncProtocol.portable(altered)),"A","now");
+        try{SyncProtocol.merge(Collections.singletonList(edited),Collections.singletonMap("one",p1),initial.bases,Collections.emptyMap(),"B");fail("Accepted edited synced history");}catch(IllegalArgumentException expected){}
+        SyncProtocol.Result deletion=SyncProtocol.merge(Collections.singletonList(first),Collections.emptyMap(),initial.bases,Collections.emptyMap(),"B");assertEquals("null",deletion.outgoing.get(0).payload);
+    }
+    @Test public void incomingSyncCannotOverwriteAnotherPrivateSpace()throws Exception{
+        store.put(tx("private","Income",1000,true));String shared=store.addSpace("Shared","Household");store.connectCloud(shared,"abcdefghijklmnopqrstuv123456789",false);
+        String payload=SyncProtocol.canonical(SyncProtocol.portable(tx("private","Expense",29,true)));
+        SyncProtocol.Result plan=new SyncProtocol.Result();plan.incoming.put("private",payload);
+        try{store.applySync(shared,"abcdefghijklmnopqrstuv123456789",SyncProtocol.fingerprint(Collections.emptyMap()),plan);fail("Overwrote a private record");}catch(IllegalArgumentException expected){}
+        assertEquals(1000,store.get("private").optLong("amount"));assertTrue(store.list(shared,"Transaction").isEmpty());
+        JSONObject snapshot=store.snapshot();store.restore(snapshot);assertNull(store.cloudLink(shared));
+    }
     @Test public void realScreenCreatesTransactionAndSurvivesRecreation(){
         try(ActivityScenario<MainActivity> activity=ActivityScenario.launch(MainActivity.class)){
             onView(withText("Add transaction")).perform(scrollTo(),click());
