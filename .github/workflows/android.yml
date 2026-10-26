@@ -72,3 +72,42 @@ jobs:
         with:
           name: Android-device-test-report
           path: app/build/reports/androidTests/connected/debug/
+  publish:
+    needs: [native, android]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: PaisaPilot-debug
+          path: package
+      - name: Publish tested APK as a direct prerelease download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pilot_version=$(python3 - <<'PY'
+          import pathlib,re
+          text=pathlib.Path('app/build.gradle.kts').read_text()
+          version=re.search(r'versionName = "([0-9][0-9A-Za-z._-]*)"',text).group(1)
+          print(version)
+          PY
+          )
+          pilot_tag="v$pilot_version"
+          if gh release view "$pilot_tag" >/dev/null 2>&1; then
+            echo "Version already published; preserving its existing APK and signing certificate."
+            exit 0
+          fi
+          cp package/outputs/apk/debug/app-debug.apk "package/PaisaPilot-$pilot_version.apk"
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          apk=next(Path('package').glob('PaisaPilot-*.apk'))
+          notes=('Android pilot build. Paste financial alerts, CSV import, manual records, planning and encrypted backups are available. '
+                 'This pilot does not request SMS inbox access. Keep Play Protect enabled; device acceptance is still subject to its checks. '
+                 'Google Sheets connections require your OAuth/API setup.\n\nAPK SHA-256: '+hashlib.sha256(apk.read_bytes()).hexdigest()+'\n')
+          Path('package/release-notes.txt').write_text(notes)
+          PY
+          gh release create "$pilot_tag" "package/PaisaPilot-$pilot_version.apk" package/signing-certificate.txt --target "$GITHUB_SHA" --prerelease --title "PaisaPilot $pilot_version" --notes-file package/release-notes.txt
