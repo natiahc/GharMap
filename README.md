@@ -46,9 +46,8 @@ Recorded income/spending is not a reconciled account balance.
 
 **Not implemented:** Google authorization and automatic Sheets sync, cross-device
 partner invitations/access/revocation, statement adapters for arbitrary banks,
-receipts/OCR, recurring notifications, tax filing and iPhone finance
-screens. The `ios/`, `core/` and old geometry documents are legacy GharMap code;
-the Android app no longer depends on them. Legacy iOS builds are not PaisaPilot.
+receipts/OCR, recurring notifications and tax filing. The `core/` and old geometry
+documents are legacy GharMap code; neither finance app depends on them.
 
 Chats require explicit paste/share; there is no background conversation access.
 SMS access is optional and may be denied or restricted. Store publication and
@@ -109,3 +108,18 @@ credentials and sync metadata are excluded and need explicit reconnection.
 `fixtures/backup-v1.b64` is a synthetic independently generated interoperability
 fixture; its test-only password is `fixture passphrase only`. Never use that
 password or deterministic fixture salt/nonce for real backups.
+
+## iPhone finance app
+
+`ios/` now contains native SwiftUI finance screens backed by the same C++ engine:
+reviewed/manual transactions, separate spaces, goals, holdings, commitments/loan
+settlements, budgets, risk caps, retirement and income-loss scenarios. Local
+records use protected atomic storage excluded from device backups. Full encrypted
+backups share the Android format and interoperability fixture. iOS has no Android
+SMS-inbox access. Google sync and transaction CSV import/export are Android-only
+work at this checkpoint; iPhone currently uses manual entry and portable backups.
+
+Generate with XcodeGen using `ios/project.yml`; scheme `PaisaPilot`, iOS 16+.
+CI builds and runs accounting, persistence and backup tests on an iPhone simulator.
+Installing on a real iPhone/TestFlight requires Apple signing and provisioning;
+the simulator `.app` artifact is not a sideloadable iPhone `.ipa`.

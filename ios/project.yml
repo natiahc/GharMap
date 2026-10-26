@@ -1,33 +1,48 @@
-name: GharMap
+name: PaisaPilot
 options:
-  bundleIdPrefix: com.gharmap
+  bundleIdPrefix: com.paisapilot
   deploymentTarget:
     iOS: '16.0'
 settings:
   base:
     SWIFT_VERSION: '5.0'
     CLANG_CXX_LANGUAGE_STANDARD: c++17
-    HEADER_SEARCH_PATHS: '$(SRCROOT)/../core/include'
+    HEADER_SEARCH_PATHS: '$(SRCROOT)/../finance/include'
 targets:
-  GharMap:
+  PaisaPilot:
     type: application
     platform: iOS
     sources:
-      - path: GharMap
-      - path: ../core/src/geometry.cpp
+      - path: PaisaPilot
+      - path: ../finance/src/finance.cpp
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.gharmap.app
-        SWIFT_OBJC_BRIDGING_HEADER: GharMap/BridgingHeader.h
+        PRODUCT_BUNDLE_IDENTIFIER: com.paisapilot.app
+        SWIFT_OBJC_BRIDGING_HEADER: PaisaPilot/BridgingHeader.h
         TARGETED_DEVICE_FAMILY: '1,2'
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: GharMap
-        INFOPLIST_KEY_NSCameraUsageDescription: GharMap uses the camera to capture room geometry and optional walkthrough recordings on your device.
+        INFOPLIST_KEY_CFBundleDisplayName: PaisaPilot
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
-        MARKETING_VERSION: '0.1.0'
-        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: '0.3.0'
+        CURRENT_PROJECT_VERSION: 3
+  PaisaPilotTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: PaisaPilotTests
+      - path: ../fixtures
+        buildPhase: resources
     dependencies:
-      - sdk: ARKit.framework
-      - sdk: SceneKit.framework
-      - sdk: AVFoundation.framework
+      - target: PaisaPilot
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  PaisaPilot:
+    build:
+      targets:
+        PaisaPilot: all
+        PaisaPilotTests: [test]
+    test:
+      targets: [PaisaPilotTests]
