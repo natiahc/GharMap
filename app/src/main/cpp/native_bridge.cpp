@@ -57,7 +57,7 @@ extern "C" JNIEXPORT jlongArray JNICALL Java_com_paisapilot_app_Engine_totals(JN
         fail(env,"Invalid ledger field lengths");return nullptr;
     }
     std::vector<jint> k(n);std::vector<jlong> a(n);std::vector<jboolean> r(n);
-    env->GetIntArrayRegion(kinds,0,n,k.data());env->GetLongArrayRegion(amounts,0,n,a.data());env->GetBooleanArrayRegion(reviewed,0,n,r.data());
+    if(n>0) {env->GetIntArrayRegion(kinds,0,n,k.data());env->GetLongArrayRegion(amounts,0,n,a.data());env->GetBooleanArrayRegion(reviewed,0,n,r.data());}
     if(env->ExceptionCheck())return nullptr;
     try {
         std::vector<paisapilot::Transaction> txs;txs.reserve(n);

@@ -13,7 +13,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.*;
 import static org.junit.Assert.*;
-import static androidx.test.espresso.Espresso.*;
+import static androidx.test.espresso.Espresso.onView;
 import static androidx.test.espresso.action.ViewActions.*;
 import static androidx.test.espresso.assertion.ViewAssertions.matches;
 import static androidx.test.espresso.matcher.ViewMatchers.*;
