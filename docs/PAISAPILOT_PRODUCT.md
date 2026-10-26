@@ -110,7 +110,7 @@ shared C++ calculation engine. Android uses SQLite; iPhone uses protected atomic
 storage. A versioned full snapshot and AES-GCM/PBKDF2 encrypted backup format
 supports cross-platform restore, with independent interoperability fixtures.
 
-Android implements manual/reviewed transactions, conservative SMS/paste import,
+Android implements manual/reviewed transactions, conservative pasted-alert import (no inbox permission),
 CSV interchange, local spaces, goals, holdings, loan/bill settlements, contribution
 splits, payday/risk/emergency/income-loss/retirement scenarios. iPhone implements
 manual/reviewed transactions, spaces, goals, holdings, settlements and financial

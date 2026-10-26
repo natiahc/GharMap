@@ -1,14 +1,10 @@
 package com.paisapilot.app;
 
-import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
-import android.content.pm.PackageManager;
-import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
-import android.provider.Telephony;
 import android.view.View;
 import android.widget.*;
 import org.json.JSONObject;
@@ -16,8 +12,6 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.YearMonth;
-import java.time.Instant;
-import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
@@ -31,7 +25,7 @@ public final class MainActivity extends Activity {
     private String pendingCsv;
     private String importSpace;
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
-    private static final int EXPORT=10,IMPORT=11,SMS=12,BACKUP=13,RESTORE=14;
+    private static final int EXPORT=10,IMPORT=11,BACKUP=13,RESTORE=14;
     private char[] backupPassword;
     private static final int GOOGLE=15;
     private interface CloudAction{void run(SheetsClient client)throws Exception;}
@@ -272,7 +266,6 @@ public final class MainActivity extends Activity {
     private void data(){
         note("Records stay in this app's private device storage. No app-operated server, analytics or cloud AI. Android/device security still applies. Uninstalling deletes local data.");
         content.addView(Ui.button(this,"Paste financial SMS / shared chat text",true,v->paste()));
-        content.addView(Ui.button(this,"Import recent financial SMS",false,v->smsConsent()));
         content.addView(Ui.button(this,"Import PaisaPilot CSV",false,v->{importSpace=space;Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,IMPORT);}));
         content.addView(Ui.button(this,"Export this space's transactions CSV",false,v->export()));
         content.addView(Ui.button(this,"Create household or business space",false,v->newSpace()));
@@ -280,9 +273,9 @@ public final class MainActivity extends Activity {
         content.addView(Ui.button(this,"Encrypted full backup",false,v->backupDialog(false)));
         content.addView(Ui.button(this,"Restore full backup",false,v->backupDialog(true)));
         note("CSV opens in Google Sheets/Excel and contains transactions only; goals, plans, commitments and holdings are not included. Use encrypted full backup for all records. Optional Google Sheets sync and partner access need Google OAuth/API setup. Standard bank-statement adapters are not connected.");
-        note("SMS import is optional, on demand and limited to supported unambiguous formats. Permission may be restricted by Android or store policy. Paste/manual entry works without SMS access. No background chat access.");
+        note("This pilot does not read your SMS inbox or request SMS permission. Paste a financial alert or import a transaction CSV for review. OTP/authentication text is excluded. No background chat access.");
         note("Imported records start unreviewed. Match them to statements, remove duplicates from different sources, and correct transfers, loans and card repayments before approving. No claim of complete capture or automatic reconciliation.");
-        content.addView(Ui.button(this,"App capabilities",false,v->message("PaisaPilot 0.3 pilot\nOffline INR tracking, review, CSV, planning, separate spaces, goals, holdings and commitments.\nNo live market prices, payment execution, investment orders, tax filing or return guarantees.\nOptional Google Sheets collaboration is Google-account controlled and needs OAuth/API setup. Business spaces are not full accounting.")));
+        content.addView(Ui.button(this,"App capabilities",false,v->message("PaisaPilot 0.3.1 pilot\nOffline INR tracking, review, CSV, planning, separate spaces, goals, holdings and commitments.\nNo live market prices, payment execution, investment orders, tax filing or return guarantees.\nOptional Google Sheets collaboration is Google-account controlled and needs OAuth/API setup. Business spaces are not full accounting.")));
     }
     private void cloudScreen(){
         JSONObject link=store.cloudLink(space);LinearLayout f=form();final String target=space;
@@ -373,18 +366,6 @@ public final class MainActivity extends Activity {
             JSONObject r=Imports.sms(body,"pasted",Imports.hash(body+"|"+day),day,space);
             if(r==null)throw new IllegalArgumentException("No unambiguous supported transaction found. OTPs, multiple amounts and promises to pay are not imported. Enter this transaction manually.");
             int count=store.importTransactions(Collections.singletonList(r),space);message(count==0?"Already imported":"Imported. Review the transaction before it counts in totals.");});
-    }
-    private void smsConsent(){new AlertDialog.Builder(this).setTitle("Read recent SMS on this device?").setMessage("On your request, inspect up to 500 SMS from the last 30 days. Only supported financial candidates are saved for review; raw bodies and OTPs are not stored. Nothing is sent to a server. You can revoke permission in Android settings.")
-        .setNegativeButton("Cancel",null).setPositiveButton("Continue",(d,w)->{if(checkSelfPermission(Manifest.permission.READ_SMS)==PackageManager.PERMISSION_GRANTED)readSms();else requestPermissions(new String[]{Manifest.permission.READ_SMS},SMS);}).show();}
-    @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){super.onRequestPermissionsResult(request,permissions,results);
-        if(request==SMS){if(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED)readSms();else message("SMS access was not granted. Use paste, manual entry or CSV import.");}}
-    private void readSms(){final String target=space;message("Import started. Candidates will be saved as unreviewed in the current space.");
-        worker.execute(()->{try{List<JSONObject> rows=new ArrayList<>();long since=System.currentTimeMillis()-30L*24*60*60*1000;
-            try(Cursor c=getContentResolver().query(Telephony.Sms.Inbox.CONTENT_URI,new String[]{"_id","address","body","date"},"date>=?",new String[]{String.valueOf(since)},"date DESC")){
-                int count=0;while(c!=null&&c.moveToNext()&&count++<500){String body=c.getString(2);String day=Instant.ofEpochMilli(c.getLong(3)).atZone(ZoneId.systemDefault()).toLocalDate().toString();
-                    JSONObject r=Imports.sms(body,c.getString(1)==null?"unknown":c.getString(1),c.getString(0),day,target);if(r!=null)rows.add(r);}}
-            int added=store.importTransactions(rows,target);runOnUiThread(()->{if(!isFinishing()&&!isDestroyed()){render();message("Imported "+added+" candidates. Review before counting them as income or expenses.");}});
-        }catch(Exception e){runOnUiThread(()->{if(!isFinishing()&&!isDestroyed())error(e);});}});
     }
     private void export(){
         CheckBox consent=new CheckBox(this);consent.setText("I approve exporting all transactions in this selected space, including notes and pending records.");

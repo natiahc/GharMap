@@ -12,8 +12,8 @@ budget allocation and growth projections. No app-operated backend, analytics or 
   account labels and ownership labels. Imported records start unreviewed.
 - Separate income, purchases, refunds, transfers, card repayments, borrowing,
   loan principal and investment principal. No double counting card repayments.
-- Explicit on-demand Android SMS import (last 30 days, at most 500 messages),
-  conservative supported-format parsing, and paste/import for one shared alert.
+- Explicit paste/import for one shared financial alert with conservative
+  supported-format parsing. No SMS-inbox permission or background inbox access.
   OTP/authentication messages, future-payment messages and ambiguous multi-amount
   messages are skipped. Raw message bodies are not saved. Manual review is vital.
 - Exact-decimal transaction CSV import/export through Android's file picker.
@@ -53,15 +53,16 @@ Arbitrary bank statement adapters, receipts/OCR, recurring notifications and tax
 filing remain unimplemented. Legacy geometry code under `core/` is unused.
 
 Chats require explicit paste/share; there is no background conversation access.
-SMS access is optional and may be denied or restricted. Store publication and
+Inbox scanning is excluded from the pilot because Internet-sideloaded apps
+requesting SMS access can be blocked by Play Protect. Store publication and
 SMS policy approval have not been obtained. This debug APK is for sideload testing.
 Android 8+ is required; compatibility with every device is not established.
 
 ## Privacy and data ownership
 
 Records live in app-private SQLite storage; Android backup is disabled. Internet permission supports optional Google-authorized sync; no camera
-permission is requested. SMS permission is requested only
-when the user chooses inbox import. Device security remains important; there
+permission is requested. SMS, notification-listener and accessibility access are
+not requested. Device security remains important; there
 is no separate app database encryption or app lock yet.
 
 CSV exports are readable by recipients and contain selected-space transactions,
@@ -171,3 +172,15 @@ collaborators can read that selected space. Full file backups are encrypted.
 Live OAuth, permissions and multi-device API testing remain required after the
 Cloud project is configured. Automated tests exercise protocol merges, conflicts,
 deletions, private-space collision protection and restore disconnect behavior.
+
+## Android installation correction — 0.3.1
+
+The earlier pilot declared `READ_SMS`, which can trigger Play Protect's enhanced
+fraud-protection block for Internet-sideloaded apps. Version 0.3.1 removes that
+permission and the inbox-scanning UI/runtime path. Pasted alert parsing, CSV,
+manual entry, finance planning, encrypted backups and optional Google sync remain.
+Do not disable Play Protect to install the pilot. A device acceptance test is
+still needed; removing this known trigger does not guarantee a security verdict.
+Tests inspect the packaged application's permission list to prevent reintroducing
+SMS/interception permissions. Future inbox access needs an approved distribution
+and platform-policy path; do not substitute notification/accessibility scraping.

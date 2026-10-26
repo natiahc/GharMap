@@ -130,6 +130,12 @@ public class FinanceFlowTest {
         JSONObject r=tx("remote-new","Income",2900,true);SyncProtocol.Result result=new SyncProtocol.Result();result.incoming.put("remote-new",SyncProtocol.canonical(SyncProtocol.portable(r)));
         store.applySync(shared,sheet,SyncProtocol.fingerprint(Collections.emptyMap()),result);assertFalse(store.get("remote-new").optBoolean("reviewed"));assertEquals(0,store.totals(shared,YearMonth.now())[0]);assertEquals(1,store.totals(shared,YearMonth.now())[3]);
     }
+    @Test public void pilotDoesNotRequestSensitiveInboxOrInterceptionPermissions()throws Exception{
+        android.content.pm.PackageInfo info=context.getPackageManager().getPackageInfo(context.getPackageName(),android.content.pm.PackageManager.GET_PERMISSIONS);
+        Set<String> permissions=new HashSet<>(Arrays.asList(info.requestedPermissions==null?new String[0]:info.requestedPermissions));
+        for(String permission:new String[]{"android.permission.READ_SMS","android.permission.RECEIVE_SMS","android.permission.SEND_SMS","android.permission.READ_CALL_LOG","android.permission.BIND_NOTIFICATION_LISTENER_SERVICE","android.permission.BIND_ACCESSIBILITY_SERVICE"})
+            assertFalse("Pilot must not declare "+permission,permissions.contains(permission));
+    }
     @Test public void realScreenCreatesTransactionAndSurvivesRecreation(){
         try(ActivityScenario<MainActivity> activity=ActivityScenario.launch(MainActivity.class)){
             onView(withText("Add transaction")).perform(scrollTo(),click());
