@@ -9,7 +9,7 @@ pilot_sms_pid=$!
 trap 'kill "$pilot_sms_pid" 2>/dev/null || true' EXIT
 pilot_sms_ready=false
 for attempt in $(seq 1 40); do
-  if rg -q 'WAITING_FOR_TEST_SMS' app/build/live-sms-test.txt; then
+  if grep -q 'WAITING_FOR_TEST_SMS' app/build/live-sms-test.txt; then
     pilot_sms_ready=true
     break
   fi
@@ -27,4 +27,4 @@ adb -e emu sms send +15550001111 'INR 29.00 debited from test account'
 wait "$pilot_sms_pid"
 trap - EXIT
 cat app/build/live-sms-test.txt
-rg -q 'OK \(1 test\)' app/build/live-sms-test.txt
+grep -q 'OK \(1 test\)' app/build/live-sms-test.txt
