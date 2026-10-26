@@ -105,7 +105,10 @@ store approval, domain and trademark availability remain unvalidated.
 
 ## Migration status
 
-The legacy GharMap application and workflows remain in place. No finance feature
-is implemented by this documentation checkpoint. Subsequent migration must
+The legacy GharMap application and workflows remain in place. A standalone
+C++17 finance core now implements reviewed transaction totals, monthly budgets,
+emergency runway and user-selected risk allocation with a funding cap/pause.
+It has sanitizer-backed tests and CI, but no finance UI or persistent ledger yet.
+Subsequent migration must
 replace scanning permissions, dependencies, app identity, screens, tests and CI
 before any build can be described as a PaisaPilot application.

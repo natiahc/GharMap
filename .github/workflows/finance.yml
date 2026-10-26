@@ -1,0 +1,16 @@
+name: PaisaPilot finance checks
+on:
+  push:
+    paths: ['finance/**', 'scripts/test_finance.sh', '.github/workflows/finance.yml']
+  pull_request:
+    paths: ['finance/**', 'scripts/test_finance.sh', '.github/workflows/finance.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  finance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check accounting and budgets with sanitizers
+        run: bash scripts/test_finance.sh

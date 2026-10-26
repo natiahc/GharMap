@@ -8,8 +8,11 @@ Google Sheets, and optional household sharing.
 
 ## Current status
 
-Product planning only. PaisaPilot transaction capture, Google authorization,
-spreadsheet sync, sharing and financial calculations are not implemented yet.
+The first platform-independent C++17 finance core is implemented and tested.
+It calculates reviewed income/expense totals, monthly contribution budgets and
+emergency runway. It is not yet connected to Android or iOS screens.
+Transaction capture, Google authorization, spreadsheet sync and sharing remain
+unimplemented.
 
 GharMap room-scanning development has been discontinued. Its Android/iOS source,
 geometry engine, build scripts and existing workflows remain temporarily as
@@ -41,7 +44,40 @@ See the [product brief and phased roadmap](docs/PAISAPILOT_PRODUCT.md).
 
 ## Next implementation milestone
 
-Create the finance data model and an offline transaction-review flow, then add
+Connect the finance core to an offline transaction-review flow, then add
 tested Android SMS parsing. Retire the legacy scanning app through explicit,
 reviewable migration commits. Add Google Sheets sync after local accounting and
 deduplication are reliable.
+
+## Finance core
+
+Run `bash scripts/test_finance.sh` with a C++17 compiler on Linux. The checks use
+address/undefined-behaviour sanitizers; CI runs them independently of Android.
+The standalone `finance/CMakeLists.txt` can also build the library and tests.
+
+- All amounts use integer minor units (paise for INR), with range/overflow checks.
+- Reporting accepts one currency and a caller-selected period. Only reviewed
+  records count; exact repeated IDs count once and conflicting IDs fail.
+  Stable IDs must be assigned by capture/reconciliation: different IDs are not
+  automatically recognised as the same economic transaction.
+- Purchases count as expenses; card repayments, account transfers, borrowed
+  principal and investment principal do not count as income/expenses. Interest,
+  fees and realised investment gains need separate income/expense records.
+  Refunds are separate and can produce negative net expenses for a period.
+  These totals are not an account-balance reconciliation or cash-flow statement.
+- The budget uses take-home pay minus spending, debt payments, reserve saving
+  and other goal contributions. Enter spending excluding debt payments and
+  contributions to avoid double counting. A deficit produces no investment
+  allocation. Accessible reserves never become monthly income.
+- The user chooses a risk percentage (basis points); zero is the default.
+  Risk contributions cannot exceed supplied remaining funding headroom, and
+  pause mode redirects that contribution to long-term savings. The caller must
+  persist and decrement headroom across months; the calculator holds no state
+  and cannot enforce broker limits or stop losses.
+- Runway uses accessible reserves divided by essential monthly outgoings,
+  including essential debt payments. Zero outgoings returns unknown runway.
+  Keep credit limits, market-dependent investments and expected repayments out
+  of accessible reserves. Reserve duration is configurable (default six months).
+
+The calculations are scenarios, not product recommendations, return forecasts
+or trade execution. Only synthetic fixtures are committed.
